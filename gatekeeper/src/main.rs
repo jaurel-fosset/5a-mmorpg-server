@@ -1,8 +1,16 @@
-use axum::{response::Html, routing::get, Router};
+mod routes;
+
+use axum::{
+    response::Html,
+    routing::{get,post},
+    Router
+};
 
 #[tokio::main]
 async fn main() {
-    let app = Router::new().route("/", get(handler));
+    let app = Router::new()
+        .route("/", get(handler))
+        .route("/login", post(routes::login::login));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
