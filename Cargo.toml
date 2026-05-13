@@ -4,3 +4,4 @@ members = ["game_server"]
 
 [workspace.dependencies]
 bevy = "0.18.1"
+game-sockets = { path = "game_sockets" }
