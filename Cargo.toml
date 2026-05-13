@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = []
+members = ["game_server"]
 
 [workspace.dependencies]
 bevy = "0.18.1"

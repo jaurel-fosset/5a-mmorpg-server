@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "mmorpg-server"
+name = "game_server"
 version = "0.1.0"
