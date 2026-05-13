@@ -1,6 +1,6 @@
-[package]
-name = "mmorpg-server"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "3"
+members = []
 
-[dependencies]
+[workspace.dependencies]
+bevy = "0.18.1"
