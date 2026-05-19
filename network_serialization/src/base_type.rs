@@ -1,4 +1,4 @@
-﻿use bytes::{Buf, BufMut, Bytes};
+﻿use bytes::{Buf, BufMut};
 use ordered_float::NotNan;
 use crate::{Deserializable, Serializable, SerializationError};
 
@@ -15,7 +15,7 @@ impl Serializable for NotNan<f32>
 
 impl Deserializable for NotNan<f32>
 {
-    fn deserialize(bytes: &mut Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Self
     {
         deserialize_f32(bytes)
     }
@@ -32,7 +32,7 @@ impl Serializable for f32
 
 impl Deserializable for f32
 {
-    fn deserialize(bytes: &mut Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Self
     {
         let value = NotNan::deserialize(bytes);
         value.into_inner()
@@ -50,9 +50,77 @@ impl Serializable for u8
 
 impl Deserializable for u8
 {
-    fn deserialize(bytes: &mut Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Self
     {
         bytes.get_u8()
+    }
+}
+
+impl Serializable for u16
+{
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
+    {
+        stream.put_u16(self);
+        Ok(())
+    }
+}
+
+impl Deserializable for u16
+{
+    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    {
+        bytes.get_u16()
+    }
+}
+
+impl Serializable for u32
+{
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
+    {
+        stream.put_u32(self);
+        Ok(())
+    }
+}
+
+impl Deserializable for u32
+{
+    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    {
+        bytes.get_u32()
+    }
+}
+
+impl Serializable for u64
+{
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
+    {
+        stream.put_u64(self);
+        Ok(())
+    }
+}
+
+impl Deserializable for u64
+{
+    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    {
+        bytes.get_u64()
+    }
+}
+
+impl Serializable for u128
+{
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
+    {
+        stream.put_u128(self);
+        Ok(())
+    }
+}
+
+impl Deserializable for u128
+{
+    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    {
+        bytes.get_u128()
     }
 }
 
