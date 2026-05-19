@@ -25,7 +25,7 @@ async fn main() {
     });
 
     let app = Router::new()
-
+        .route("/health", get(routes::health::health))
         .route("/login", post(routes::login::login))
         .with_state(shared_state);
 
