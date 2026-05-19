@@ -8,7 +8,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 // Requête pour récupérer l'ip du GameServer (hardcodé)
 //
@@ -27,18 +26,18 @@ use tokio::sync::Mutex;
 // > ZADD servers:available 50 "gameserver:gs-03"
 
 pub async fn login(
-    State(state): State<Arc<Mutex<AppState>>>,
+    State(state): State<Arc<AppState>>,
     Json(payload): Json<AuthPayload>,
 ) -> Result<Json<AuthBody>, AuthError> {
     if payload.username.is_empty() {
         return Err(AuthError::MissingCredentials);
     }
 
-    let mut state = state.lock().await;
+    let mut con = state.redis_connexion.clone();
 
     let game_server: Vec<String> = redis::cmd("ZRANGE")
         .arg(&["servers:available", "0", "0"])
-        .query_async(&mut state.redis_connexion)
+        .query_async(&mut con)
         .await
         .unwrap();
 
@@ -48,7 +47,7 @@ pub async fn login(
 
     let info_server: Vec<String> = redis::cmd("HGETALL")
         .arg::<Vec<String>>(game_server)
-        .query_async(&mut state.redis_connexion)
+        .query_async(&mut con)
         .await
         .unwrap();
 
@@ -99,9 +98,7 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
-            AuthError::NoServerAvailable => {
-                (StatusCode::SERVICE_UNAVAILABLE, "No server available")
-            }
+            AuthError::NoServerAvailable => (StatusCode::SERVICE_UNAVAILABLE, "No server available")
         };
         let body = Json(json!({
             "error": error_message,
