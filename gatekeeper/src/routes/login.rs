@@ -35,21 +35,36 @@ pub async fn login(
 
     let mut con = state.redis_connexion.clone();
 
-    let game_server: Vec<String> = redis::cmd("ZRANGE")
-        .arg(&["servers:available", "0", "0"])
-        .query_async(&mut con)
-        .await
-        .unwrap();
+    let mut found_server = false;
+    let mut info_server: Vec<String> = Vec::new();
 
-    if game_server.is_empty() {
-        return Err(AuthError::NoServerAvailable);
+    while !found_server {
+        let game_server: Vec<String>  = redis::cmd("ZRANGE")
+            .arg(&["servers:available", "0", "0"])
+            .query_async(&mut con)
+            .await
+            .unwrap();
+
+        if game_server.is_empty() {
+            return Err(AuthError::NoServerAvailable);
+        }
+
+        info_server = redis::cmd("HGETALL")
+            .arg(game_server.clone())
+            .query_async(&mut con)
+            .await
+            .unwrap();
+
+        if info_server.is_empty() {
+            redis::cmd("ZREM")
+                .arg(&["servers:available", game_server.get(0).unwrap().as_str()])
+                .exec_async(&mut con)
+                .await
+                .unwrap();
+        } else {
+            found_server = true;
+        }
     }
-
-    let info_server: Vec<String> = redis::cmd("HGETALL")
-        .arg::<Vec<String>>(game_server)
-        .query_async(&mut con)
-        .await
-        .unwrap();
 
     let mut ip: String = "".to_owned();
     let mut port: u16 = 0;
@@ -98,7 +113,9 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
-            AuthError::NoServerAvailable => (StatusCode::SERVICE_UNAVAILABLE, "No server available")
+            AuthError::NoServerAvailable => {
+                (StatusCode::SERVICE_UNAVAILABLE, "No server available")
+            }
         };
         let body = Json(json!({
             "error": error_message,
