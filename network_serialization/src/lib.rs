@@ -1,6 +1,7 @@
 ﻿use bytes::Bytes;
 use ordered_float::FloatIsNan;
 
+#[cfg(feature = "bevy_support")]
 pub mod bevy;
 pub mod base_type;
 
