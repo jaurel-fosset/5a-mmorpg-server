@@ -1,5 +1,6 @@
 pub mod client;
 pub mod orchestrator;
+mod heartbeat;
 
 use bevy::prelude::*;
 use bevy::ecs::schedule::ScheduleLabel;
@@ -7,6 +8,7 @@ use game_sockets;
 
 use crate::env_parameter::Environment;
 use crate::network::client::{ClientHandlingPlugin, ConnectingClients};
+use crate::network::heartbeat::HeartbeatNetworkPlugin;
 use crate::network::orchestrator::{HeartbeatStreamFactory, OrchestratorHandlingPlugin};
 
 use crate::schedule_handling;
@@ -103,6 +105,7 @@ impl Plugin for NetworkPluginGroup
         app
             .add_plugins(OrchestratorHandlingPlugin)
             .add_plugins(ClientHandlingPlugin)
+            .add_plugins(HeartbeatNetworkPlugin)
             .add_systems(Startup, Self::listen)
             .add_systems(NetworkUpdate, Self::get_packets)
             .insert_resource(ServerListenSocket::default());

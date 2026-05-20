@@ -7,3 +7,4 @@ edition = "2024"
 bevy = {workspace = true}
 game_sockets = {workspace = true}
 thiserror = "2.0.18"
+network_serialization = { path="../network_serialization" }
