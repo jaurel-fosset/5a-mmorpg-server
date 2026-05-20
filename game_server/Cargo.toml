@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 bevy = {workspace = true}
 game_sockets = {workspace = true}
+thiserror = "2.0.18"
