@@ -98,7 +98,7 @@ impl Plugin for NetworkPluginGroup
     fn build(&self, app: &mut App)
     {
         schedule_handling::ScheduleFactory::register(app, NetworkUpdate).after(PostUpdate);
-        
+
         schedule_handling::ScheduleFactory::register(app, PreNetworkUpdate).before(NetworkUpdate);
         schedule_handling::ScheduleFactory::register(app, PostNetworkUpdate).after(NetworkUpdate);
 

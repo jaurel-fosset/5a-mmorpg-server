@@ -9,7 +9,7 @@ use network_serialization::packets::Packet;
 use crate::env_parameter::Environment;
 use crate::network::client::ActiveClients;
 use crate::network::orchestrator::Orchestrator;
-use crate::network::ServerListenSocket;
+use crate::network::{NetworkUpdate, ServerListenSocket};
 
 pub struct HeartbeatNetworkPlugin;
 
@@ -19,7 +19,7 @@ impl Plugin for HeartbeatNetworkPlugin
     {
         app
             .insert_resource(HeartbeatTimer::default())
-            .add_systems(Update, Self::send_heartbeat);
+            .add_systems(NetworkUpdate, Self::send_heartbeat);
     }
 }
 

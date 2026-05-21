@@ -8,7 +8,7 @@ use game_server::startup_system_info::StartupSystemInfoPlugin;
 fn main()
 {
     App::new()
-        .add_plugins(diagnostic::DiagnosticsPlugin)
+        .add_plugins(DefaultPlugins)
         .add_plugins(diagnostic::SystemInformationDiagnosticsPlugin)
         .add_plugins(EnvParameterPlugin)
         .add_plugins(StartupSystemInfoPlugin)
