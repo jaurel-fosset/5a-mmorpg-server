@@ -4,4 +4,4 @@ members = ["game_server", "network_serialization", "gatekeeper", "orchestrator"]
 
 [workspace.dependencies]
 bevy = "0.18.1"
-game-sockets = { path = "game_sockets" }
+game_sockets = { path = "game_sockets" }

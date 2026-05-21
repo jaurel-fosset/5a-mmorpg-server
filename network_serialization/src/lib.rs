@@ -4,12 +4,8 @@ use ordered_float::FloatIsNan;
 #[cfg(feature = "bevy_support")]
 pub mod bevy;
 pub mod base_type;
+pub mod packets;
 
-pub trait Packet
-{
-    fn read(bytes: Bytes) -> Self;
-    fn write(self) -> bytes::Bytes;
-}
 
 pub trait Serializable
 {
@@ -21,6 +17,7 @@ pub trait Deserializable
     fn deserialize(bytes: &mut Bytes) -> Self;
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum SerializationError
 {
     BadArguments,
