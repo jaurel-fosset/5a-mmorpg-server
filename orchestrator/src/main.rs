@@ -9,7 +9,7 @@ struct AppState {
     redis_connexion: MultiplexedConnection,
 }
 
-#[dotenvy::load(path = ".env")]
+#[dotenvy::load(path = ".env", required = false)]
 #[tokio::main]
 async fn main() {
     println!("Hello, world!");
