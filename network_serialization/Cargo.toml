@@ -1,0 +1,9 @@
+﻿[package]
+name = "network_serialization"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true }
+bytes = "1.11.1"
+ordered-float = "5.3.0"
