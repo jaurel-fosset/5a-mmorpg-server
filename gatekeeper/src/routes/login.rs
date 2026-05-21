@@ -8,6 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
+use uuid::Uuid;
 
 // Requête pour récupérer l'ip du GameServer (hardcodé)
 //
@@ -31,6 +32,10 @@ pub async fn login(
 ) -> Result<Json<AuthBody>, AuthError> {
     if payload.username.is_empty() {
         return Err(AuthError::MissingCredentials);
+    }
+
+    if payload.password.is_empty() || payload.password != "1234" {
+        return Err(AuthError::WrongPassword);
     }
 
     let mut con = state.redis_connexion.clone();
@@ -68,29 +73,43 @@ pub async fn login(
         }
     }
 
-    Ok(Json(AuthBody::new(ip, port, zone)))
+    let id = Uuid::new_v4();
+
+    Ok(Json(AuthBody::new(id.to_string(), ServerInfoBody::new(ip,port,zone))))
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AuthPayload {
     username: String,
+    password: String,
 }
 #[derive(Debug, Serialize)]
 pub struct AuthBody {
+    uuid: String,
+    server_info : ServerInfoBody
+}
+
+impl AuthBody {
+    fn new(uuid: String, server_info: ServerInfoBody) -> Self {
+        Self { uuid, server_info }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct ServerInfoBody {
     ip: String,
     port: u16,
     zone: String,
 }
 
-impl AuthBody {
-    fn new(ip: String, port: u16, zone: String) -> Self {
-        Self { ip, port, zone }
-    }
+impl ServerInfoBody {
+    fn new(ip: String, port: u16, zone: String) -> Self { Self{ ip, port, zone } }
 }
 
 #[derive(Debug)]
 pub enum AuthError {
     MissingCredentials,
+    WrongPassword,
     NoServerAvailable,
 }
 
@@ -98,6 +117,7 @@ impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
+            AuthError::WrongPassword => (StatusCode::UNAUTHORIZED, "Unauthorized"),
             AuthError::NoServerAvailable => (StatusCode::SERVICE_UNAVAILABLE, "No server available")
         };
         let body = Json(json!({
