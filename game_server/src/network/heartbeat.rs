@@ -61,11 +61,14 @@ impl HeartbeatNetworkPlugin
 
         let packet = HeartbeatPacket
         {
+            port: environment.port,
             player_number: clients.num_clients(),
             player_capacity: environment.player_capacity,
             cpu_load: cpu_load as u8,
             ram_load: ram_load as u8,
         }.write();
+
+        println!("Sending heartbeat");
 
         if let Err(error) = server.socket.send(&orchestrator, heartbeat_stream, packet)
         {

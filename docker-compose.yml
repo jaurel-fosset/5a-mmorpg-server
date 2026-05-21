@@ -29,6 +29,8 @@ services:
     build:
       context: .
       dockerfile: orchestrator/Dockerfile
+    group_add:
+      - "967"
     environment:
       REDIS_URL: redis://redis:6379
       ORCH_PORT: 9000
@@ -38,7 +40,12 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:z,rw
+
+  game_server:
+    build:
+      context: .
+      dockerfile: game_server/Dockerfile
 
 volumes:
   redis-data:

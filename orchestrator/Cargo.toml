@@ -12,3 +12,4 @@ tokio = { version = "1.52.3", features = ["full"] }
 network_serialization = { path = "../network_serialization" }
 bytes = "1.11.1"
 bollard = "0.21.0"
+game_sockets = { path = "../game_sockets" }

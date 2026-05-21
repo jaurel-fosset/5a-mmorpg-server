@@ -23,6 +23,7 @@ impl Orchestrator
 {
     pub fn new(connection: game_sockets::GameConnection, command_stream: game_sockets::GameStream) -> Self
     {
+        println!("Orchestrator connection created");
         Self
         {
             connection,

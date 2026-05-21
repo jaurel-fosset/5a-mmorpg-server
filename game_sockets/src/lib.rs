@@ -144,6 +144,7 @@ impl GamePeer {
     }
 
     pub fn listen(&self, ip: &str, port: u16) -> Result<(), GameSocketError> {
+        println!("listening on {}:{}", ip, port);
         self.send_cmd(BackendCommand::Bind { addr: ip.to_string(), port })
     }
 
