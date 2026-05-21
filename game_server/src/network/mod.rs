@@ -122,7 +122,7 @@ struct ServerListenSocket
 impl Default for ServerListenSocket
 {
     fn default() -> Self {
-        let backend = game_sockets::protocols::QuicBackend::new();
+        let backend = game_sockets::protocols::UdpBackend::new();
         let socket = game_sockets::GamePeer::new(backend);
 
         Self { socket }
