@@ -1,6 +1,7 @@
 ﻿use bytes::{Buf, BufMut, Bytes};
 use bevy::prelude::*;
 use bevy::prelude::ops::sqrt;
+use bevy::reflect::Array;
 use ordered_float::NotNan;
 use crate::{Deserializable, Serializable, SerializationError};
 
@@ -19,13 +20,13 @@ impl Serializable for Transform
 
 impl Deserializable for Transform
 {
-    fn deserialize(bytes: &mut Bytes) -> Self
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     {
-        let translation = Vec3::deserialize(bytes);
-        let rotation = Quat::deserialize(bytes);
-        let scale = Vec3::deserialize(bytes);
+        let translation = Vec3::deserialize(bytes)?;
+        let rotation = Quat::deserialize(bytes)?;
+        let scale = Vec3::deserialize(bytes)?;
 
-        Transform { translation, rotation, scale }
+        Ok(Transform { translation, rotation, scale })
     }
 }
 
@@ -43,13 +44,13 @@ impl Serializable for Vec3
 
 impl Deserializable for Vec3
 {
-    fn deserialize(bytes: &mut Bytes) -> Self
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     {
-        let x = f32::deserialize(bytes);
-        let y = f32::deserialize(bytes);
-        let z = f32::deserialize(bytes);
+        let x = f32::deserialize(bytes)?;
+        let y = f32::deserialize(bytes)?;
+        let z = f32::deserialize(bytes)?;
 
-        Vec3::new(x, y, z)
+        Ok(Vec3::new(x, y, z))
     }
 }
 
@@ -57,12 +58,17 @@ impl Serializable for Quat
 {
     fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
     {
+        if self.is_nan()
+        {
+            return Err(SerializationError::NotSerializableState);
+        }
+
         let values = self.to_array();
         let values = [
-            NotNan::new(values[0])?,
-            NotNan::new(values[1])?,
-            NotNan::new(values[2])?,
-            NotNan::new(values[3])?
+            NotNan::new(values[0]).unwrap(),
+            NotNan::new(values[1]).unwrap(),
+            NotNan::new(values[2]).unwrap(),
+            NotNan::new(values[3]).unwrap(),
         ];
 
         let max_index = max_by_index(values);
@@ -86,7 +92,7 @@ impl Serializable for Quat
 
 impl Deserializable for Quat
 {
-    fn deserialize(bytes: &mut Bytes) -> Self
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     {
         let values = [bytes.get_u8(), bytes.get_u8(), bytes.get_u8(), bytes.get_u8()];
 
@@ -97,19 +103,19 @@ impl Deserializable for Quat
 
         if values[0] & 0xC0 == 0
         {
-            return Quat::from_xyzw(v4, v2, v3, v1);
+            return Ok(Quat::from_xyzw(v4, v2, v3, v1));
         }
         if values[0] & 0xC0 == 0x40
         {
-            return Quat::from_xyzw(v1, v4, v3, v2);
+            return Ok(Quat::from_xyzw(v1, v4, v3, v2));
         }
         if values[0] & 0xC0 == 0x80
         {
-            return Quat::from_xyzw(v1, v2, v4, v3);
+            return Ok(Quat::from_xyzw(v1, v2, v4, v3));
         }
         if values[0] & 0xC0 == 0xC0
         {
-            return Quat::from_xyzw(v1, v2, v3, v4);
+            return Ok(Quat::from_xyzw(v1, v2, v3, v4));
         }
 
         unreachable!()
