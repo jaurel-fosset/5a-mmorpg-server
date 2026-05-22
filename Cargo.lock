@@ -2740,19 +2740,14 @@ name = "game_sockets"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "crc32fast",
  "futures",
  "quinn",
- "rand 0.9.4",
  "rcgen",
  "rustls",
- "serde",
- "serde_json",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
- "tracing-subscriber",
  "uuid",
 ]
 
@@ -4305,7 +4300,6 @@ dependencies = [
  "game_sockets",
  "network_serialization",
  "redis",
- "serde",
  "tokio",
 ]
 
