@@ -13,15 +13,34 @@ use crate::network::orchestrator::{HeartbeatStreamFactory, OrchestratorHandlingP
 
 use crate::schedule_handling;
 
-pub struct NetworkPluginGroup;
-
-
 #[derive(ScheduleLabel, Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct PreNetworkUpdate;
 #[derive(ScheduleLabel, Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct NetworkUpdate;
 #[derive(ScheduleLabel, Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct PostNetworkUpdate;
+
+pub struct NetworkPluginGroup;
+
+
+impl Plugin for NetworkPluginGroup
+{
+    fn build(&self, app: &mut App)
+    {
+        schedule_handling::ScheduleFactory::register(app, NetworkUpdate).after(PostUpdate);
+
+        schedule_handling::ScheduleFactory::register(app, PreNetworkUpdate).before(NetworkUpdate);
+        schedule_handling::ScheduleFactory::register(app, PostNetworkUpdate).after(NetworkUpdate);
+
+        app
+            .add_plugins(OrchestratorHandlingPlugin)
+            .add_plugins(ClientHandlingPlugin)
+            .add_plugins(HeartbeatNetworkPlugin)
+            .add_systems(Startup, Self::listen)
+            .add_systems(NetworkUpdate, Self::get_packets)
+            .insert_resource(ServerListenSocket::default());
+    }
+}
 
 impl NetworkPluginGroup
 {
@@ -93,24 +112,7 @@ impl NetworkPluginGroup
     }
 }
 
-impl Plugin for NetworkPluginGroup
-{
-    fn build(&self, app: &mut App)
-    {
-        schedule_handling::ScheduleFactory::register(app, NetworkUpdate).after(PostUpdate);
 
-        schedule_handling::ScheduleFactory::register(app, PreNetworkUpdate).before(NetworkUpdate);
-        schedule_handling::ScheduleFactory::register(app, PostNetworkUpdate).after(NetworkUpdate);
-
-        app
-            .add_plugins(OrchestratorHandlingPlugin)
-            .add_plugins(ClientHandlingPlugin)
-            .add_plugins(HeartbeatNetworkPlugin)
-            .add_systems(Startup, Self::listen)
-            .add_systems(NetworkUpdate, Self::get_packets)
-            .insert_resource(ServerListenSocket::default());
-    }
-}
 
 
 #[derive(Resource)]
