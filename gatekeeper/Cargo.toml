@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 serde = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 redis = { workspace = true, features = ["aio"] }
 dotenvy = { workspace = true }

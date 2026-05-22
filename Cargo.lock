@@ -2759,6 +2759,7 @@ dependencies = [
  "dotenvy",
  "redis",
  "serde",
+ "serde_json",
  "tokio",
  "uuid",
 ]
