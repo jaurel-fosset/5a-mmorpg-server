@@ -9,4 +9,5 @@ bevy_support = ["dep:bevy"]
 [dependencies]
 bevy = { workspace = true, optional = true }
 bytes = { workspace = true }
+thiserror = { workspace = true }
 ordered-float = "5.3.0"
