@@ -5,7 +5,7 @@ impl Serializable for f32
 {
     fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
     {
-        stream.put_slice(self.to_be_bytes().as_ref());
+        stream.put_f32(self);
         Ok(())
     }
 }
@@ -14,9 +14,7 @@ impl Deserializable for f32
 {
     fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
-        bytes.try_get_u8()?;
-        let bytes: [u8; 4] = [bytes[0], bytes[1], bytes[2], bytes[3]];
-        Ok(f32::from_be_bytes(bytes))
+        Ok(bytes.try_get_f32()?)
     }
 }
 
