@@ -1,4 +1,4 @@
-use crate::Deserializable;
+use crate::{Deserializable, SerializationError};
 use crate::packets::Packet;
 use crate::Serializable;
 
@@ -14,33 +14,33 @@ pub struct HeartbeatPacket
 
 impl Packet for HeartbeatPacket
 {
-    fn read(mut bytes: bytes::Bytes) -> Self
+    fn read(mut bytes: bytes::Bytes) -> Result<Self, SerializationError>
     {
-        let port = u16::deserialize(&mut bytes);
-        let player_number = u8::deserialize(&mut bytes);
-        let player_capacity = u8::deserialize(&mut bytes);
-        let cpu_load = u8::deserialize(&mut bytes);
-        let ram_load = u8::deserialize(&mut bytes);
+        let port = u16::deserialize(&mut bytes)?;
+        let player_number = u8::deserialize(&mut bytes)?;
+        let player_capacity = u8::deserialize(&mut bytes)?;
+        let cpu_load = u8::deserialize(&mut bytes)?;
+        let ram_load = u8::deserialize(&mut bytes)?;
 
-        Self
+        Ok(Self
         {
             port,
             player_number,
             player_capacity,
             cpu_load,
             ram_load,
-        }
+        })
     }
 
-    fn write(self) -> bytes::Bytes
+    fn write(self) -> Result<bytes::Bytes, SerializationError>
     {
         let mut buffer = bytes::BytesMut::new();
-        self.port.serialize(&mut buffer).unwrap();
-        self.player_number.serialize(&mut buffer).unwrap();
-        self.player_capacity.serialize(&mut buffer).unwrap();
-        self.cpu_load.serialize(&mut buffer).unwrap();
-        self.ram_load.serialize(&mut buffer).unwrap();
+        self.port.serialize(&mut buffer)?;
+        self.player_number.serialize(&mut buffer)?;
+        self.player_capacity.serialize(&mut buffer)?;
+        self.cpu_load.serialize(&mut buffer)?;
+        self.ram_load.serialize(&mut buffer)?;
 
-        buffer.freeze()
+        Ok(buffer.freeze())
     }
 }
