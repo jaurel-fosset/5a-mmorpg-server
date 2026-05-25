@@ -1,7 +1,5 @@
 ﻿use bytes::{Buf, BufMut, Bytes};
 use bevy::prelude::*;
-use bevy::prelude::ops::sqrt;
-use bevy::reflect::Array;
 use ordered_float::NotNan;
 use crate::{Deserializable, Serializable, SerializationError};
 
@@ -99,7 +97,7 @@ impl Deserializable for Quat
         let v1 = u16::from_be_bytes([values[1], values[0] & 0x30 << 2]) as f32;
         let v2 = u16::from_be_bytes([values[2], values[0] & 0x0C << 4]) as f32;
         let v3 = u16::from_be_bytes([values[3], values[0] & 0x03 << 6]) as f32;
-        let v4 = sqrt(1.0 - v1*v1 - v2*v2 - v3*v3);
+        let v4 = ops::sqrt(1.0 - v1*v1 - v2*v2 - v3*v3);
 
         if values[0] & 0xC0 == 0
         {

@@ -1,5 +1,4 @@
 ﻿use bytes::{Bytes, TryGetError};
-use ordered_float::FloatIsNan;
 use thiserror::Error;
 
 #[cfg(feature = "bevy_support")]
@@ -29,5 +28,5 @@ pub enum SerializationError
 
 impl From<TryGetError> for SerializationError
 {
-    fn from(value: TryGetError) -> Self { Self::NotEnoughBits }
+    fn from(_: TryGetError) -> Self { Self::NotEnoughBits }
 }
