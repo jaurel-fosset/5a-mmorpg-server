@@ -5,6 +5,7 @@ use crate::Serializable;
 #[derive(Debug)]
 pub struct HeartbeatPacket
 {
+    pub ip : String,
     pub port : u16,
     pub player_number: u8,
     pub player_capacity: u8,
@@ -16,6 +17,7 @@ impl Packet for HeartbeatPacket
 {
     fn read(mut bytes: bytes::Bytes) -> Self
     {
+        let ip = String::deserialize(&mut bytes);
         let port = u16::deserialize(&mut bytes);
         let player_number = u8::deserialize(&mut bytes);
         let player_capacity = u8::deserialize(&mut bytes);
@@ -24,6 +26,7 @@ impl Packet for HeartbeatPacket
 
         Self
         {
+            ip,
             port,
             player_number,
             player_capacity,
@@ -35,6 +38,7 @@ impl Packet for HeartbeatPacket
     fn write(self) -> bytes::Bytes
     {
         let mut buffer = bytes::BytesMut::new();
+        self.ip.serialize(&mut buffer).unwrap();
         self.port.serialize(&mut buffer).unwrap();
         self.player_number.serialize(&mut buffer).unwrap();
         self.player_capacity.serialize(&mut buffer).unwrap();

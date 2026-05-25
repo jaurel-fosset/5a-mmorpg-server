@@ -18,7 +18,7 @@ async fn main() {
     let client = redis::Client::open(env::var("REDIS_URL").unwrap()).unwrap();
     let con = client.get_multiplexed_async_connection().await.unwrap();
 
-    let backend = game_sockets::protocols::UdpBackend::new();
+    let backend = game_sockets::protocols::QuicBackend::new();
     let mut peer = game_sockets::GamePeer::new(backend);
 
     let port : u16 = env::var("ORCH_PORT").unwrap().parse::<u16>().unwrap();

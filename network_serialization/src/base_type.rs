@@ -124,6 +124,27 @@ impl Deserializable for u128
     }
 }
 
+impl Serializable for String
+{
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
+    {
+        let bytes = self.as_bytes();
+        stream.put_u32(bytes.len() as u32); // longueur préfixée
+        stream.put_slice(bytes);
+        Ok(())
+    }
+}
+
+impl Deserializable for String
+{
+    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    {
+        let len = bytes.get_u32() as usize;
+        let slice = bytes.copy_to_bytes(len);
+        String::from_utf8(slice.to_vec()).unwrap()
+    }
+}
+
 fn serialize_f32(value: NotNan<f32>) -> [u8; 2]
 {
     let value = value * 100.0;
