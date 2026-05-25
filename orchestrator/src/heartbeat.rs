@@ -18,7 +18,7 @@ pub async fn listen(
 
         match event {
             Ok(Some(game_sockets::GameNetworkEvent::Message { connection, stream, data })) => {
-                if data.len() < 6 {
+                if data.len() < 4 {
                     println!("Packet too small: {} bytes, skipping", data.len());
                     continue;
                 }
@@ -30,7 +30,7 @@ pub async fn listen(
                 redis::cmd("HSET")
                     .arg(&[
                         format!("gameserver:gs-{}", heartbeat.port).as_str(),
-                        "ip", "0.0.0.0",
+                        "ip", heartbeat.ip.to_string().as_str(),
                         "port", heartbeat.port.to_string().as_str(),
                         "cpu", heartbeat.cpu_load.to_string().as_str(),
                         "ram", heartbeat.ram_load.to_string().as_str(),

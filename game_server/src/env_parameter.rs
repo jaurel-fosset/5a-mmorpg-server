@@ -74,11 +74,16 @@ impl Environment
 
     fn get_ip() -> Result<String, EnvironmentSetupError>
     {
-        let ip = match std::env::var("IP")
-        {
-            Ok(ip) => ip,
-            Err(error) => return Err(EnvironmentSetupError::from_var_error("IP", error)),
-        };
+        if let Ok(ip) = std::env::var("IP") {
+            if ip != "0.0.0.0" && ip != "127.0.0.1" {
+                return Ok(ip);
+            }
+        }
+
+        // Détecte l'IP locale réelle
+        let socket = std::net::UdpSocket::bind("0.0.0.0:0").unwrap();
+        socket.connect("8.8.8.8:80").unwrap();
+        let ip = socket.local_addr().unwrap().ip().to_string();
         Ok(ip)
     }
 

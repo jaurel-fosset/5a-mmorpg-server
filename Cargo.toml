@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["game_server", "network_serialization", "gatekeeper", "orchestrator"]
+members = ["game_server", "network_serialization", "gatekeeper", "orchestrator", "hello_world"]
 
 [workspace.dependencies]
 bevy = "0.18.1"

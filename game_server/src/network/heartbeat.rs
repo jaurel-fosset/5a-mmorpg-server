@@ -61,6 +61,7 @@ impl HeartbeatNetworkPlugin
 
         let packet = HeartbeatPacket
         {
+            ip: environment.ip.to_string(),
             port: environment.port,
             player_number: clients.num_clients(),
             player_capacity: environment.player_capacity,
