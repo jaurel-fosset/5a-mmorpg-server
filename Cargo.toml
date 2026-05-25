@@ -5,3 +5,16 @@ members = ["game_server", "network_serialization", "gatekeeper", "orchestrator"]
 [workspace.dependencies]
 bevy = "0.18.1"
 game_sockets = { path = "game_sockets" }
+bytes = "1.11.1"
+tokio = { version = "1.52.3", features = ["full"] }
+redis = { version = "1" , features = ["tokio-comp"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+dotenvy = { git = "https://github.com/allan2/dotenvy", features = ["macros"] }
+thiserror = "2.0.18"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"

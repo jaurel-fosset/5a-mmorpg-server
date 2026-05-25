@@ -3,7 +3,10 @@ name = "network_serialization"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+bevy_support = ["dep:bevy"]
+
 [dependencies]
 bevy = { workspace = true, optional = true }
-bytes = "1.11.1"
+bytes = { workspace = true }
 ordered-float = "5.3.0"
