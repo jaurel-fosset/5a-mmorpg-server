@@ -2,7 +2,6 @@ use bytes::Bytes;
 use crate::SerializationError;
 
 pub mod game_server;
-pub mod orchestrator;
 
 pub trait Packet
 {
