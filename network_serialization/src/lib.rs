@@ -6,6 +6,8 @@ pub mod bevy;
 pub mod base_type;
 pub mod packets;
 pub mod net;
+#[cfg(test)]
+mod tests;
 
 pub trait Serializable
 {
