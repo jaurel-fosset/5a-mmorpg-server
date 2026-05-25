@@ -1,4 +1,4 @@
-use crate::Deserializable;
+use crate::{Deserializable, SerializationError};
 use crate::packets::Packet;
 use crate::Serializable;
 

@@ -26,6 +26,8 @@ pub enum SerializationError
     NotSerializableState,
     #[error("Not enough bits in buffer to make the value")]
     NotEnoughBits,
+    #[error("Invalid deserialization state")]
+    InvalidDeserializationState,
 }
 
 impl From<TryGetError> for SerializationError

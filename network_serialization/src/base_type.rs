@@ -138,10 +138,10 @@ impl Serializable for String
 
 impl Deserializable for String
 {
-    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
-        let len = bytes.get_u32() as usize;
+        let len = bytes.try_get_u32()? as usize;
         let slice = bytes.copy_to_bytes(len);
-        String::from_utf8(slice.to_vec()).unwrap()
+        String::from_utf8(slice.to_vec()).map_err(|e| { SerializationError::InvalidDeserializationState })
     }
 }
