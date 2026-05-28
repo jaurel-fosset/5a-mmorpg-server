@@ -24,7 +24,7 @@ pub async fn listen(
                 }
 
                 let bytes = data;
-                let heartbeat = HeartbeatPacket::read(bytes);
+                let heartbeat = HeartbeatPacket::read(bytes).unwrap(); // Should not fail sine we already checked if it was too small
                 println!("heartbeat {:?}", heartbeat);
 
                 redis::cmd("HSET")
