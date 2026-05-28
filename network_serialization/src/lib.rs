@@ -1,11 +1,13 @@
-﻿use bytes::Bytes;
-use ordered_float::FloatIsNan;
+﻿use bytes::{Bytes, TryGetError};
+use thiserror::Error;
 
 #[cfg(feature = "bevy_support")]
 pub mod bevy;
 pub mod base_type;
 pub mod packets;
-
+pub mod net;
+#[cfg(test)]
+mod tests;
 
 pub trait Serializable
 {
@@ -14,19 +16,21 @@ pub trait Serializable
 
 pub trait Deserializable
 {
-    fn deserialize(bytes: &mut Bytes) -> Self;
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError> where Self: Sized;
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Error, Debug, Copy, Clone)]
 pub enum SerializationError
 {
-    BadArguments,
+    #[error("The value is in a state preventing its serialization")]
+    NotSerializableState,
+    #[error("Not enough bits in buffer to make the value")]
+    NotEnoughBits,
+    #[error("Invalid deserialization state")]
+    InvalidDeserializationState,
 }
 
-impl From<FloatIsNan> for SerializationError
+impl From<TryGetError> for SerializationError
 {
-    fn from(_: FloatIsNan) -> SerializationError
-    {
-        SerializationError::BadArguments
-    }
+    fn from(_: TryGetError) -> Self { Self::NotEnoughBits }
 }

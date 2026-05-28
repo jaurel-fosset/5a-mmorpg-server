@@ -1,42 +1,43 @@
 ﻿use bytes::{Buf, BufMut};
-use ordered_float::NotNan;
 use crate::{Deserializable, Serializable, SerializationError};
-
-impl Serializable for NotNan<f32>
-{
-    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
-    {
-        let bytes = serialize_f32(self);
-        stream.put_slice(&bytes);
-
-        Ok(())
-    }
-}
-
-impl Deserializable for NotNan<f32>
-{
-    fn deserialize(bytes: &mut bytes::Bytes) -> Self
-    {
-        deserialize_f32(bytes)
-    }
-}
 
 impl Serializable for f32
 {
     fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
     {
-        let not_nan_self = NotNan::new(self)?;
-        not_nan_self.serialize(stream)
+        stream.put_f32(self);
+        Ok(())
     }
 }
 
 impl Deserializable for f32
 {
-    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
-        let value = NotNan::deserialize(bytes);
-        value.into_inner()
+        Ok(bytes.try_get_f32()?)
     }
+}
+
+pub fn serialize_f32_with_precision_loss(value: f32, bytes: &mut bytes::BytesMut) -> Result<(), SerializationError>
+{
+    if !value.is_finite()
+    {
+        return Err(SerializationError::NotSerializableState);
+    }
+
+    let value = value * 100.0;
+    let value = (value * i16::MAX as f32) / f32::MAX;
+    let value = value.trunc() as i16;
+
+    bytes.put_i16(value);
+    Ok(())
+}
+
+pub fn deserialize_f32_with_precision_loss(bytes: &mut bytes::Bytes) -> Result<f32, SerializationError>
+{
+    let value = bytes.get_i16() as f32;
+    let value = (value * f32::MAX) / i16::MAX as f32;
+    Ok(value / 100.0)
 }
 
 impl Serializable for u8
@@ -50,9 +51,9 @@ impl Serializable for u8
 
 impl Deserializable for u8
 {
-    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
-        bytes.get_u8()
+        Ok(bytes.try_get_u8()?)
     }
 }
 
@@ -67,9 +68,9 @@ impl Serializable for u16
 
 impl Deserializable for u16
 {
-    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
-        bytes.get_u16()
+        Ok(bytes.try_get_u16()?)
     }
 }
 
@@ -84,9 +85,9 @@ impl Serializable for u32
 
 impl Deserializable for u32
 {
-    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
-        bytes.get_u32()
+        Ok(bytes.try_get_u32()?)
     }
 }
 
@@ -101,9 +102,9 @@ impl Serializable for u64
 
 impl Deserializable for u64
 {
-    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
-        bytes.get_u64()
+        Ok(bytes.try_get_u64()?)
     }
 }
 
@@ -118,9 +119,9 @@ impl Serializable for u128
 
 impl Deserializable for u128
 {
-    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
-        bytes.get_u128()
+        Ok(bytes.try_get_u128()?)
     }
 }
 
@@ -137,23 +138,10 @@ impl Serializable for String
 
 impl Deserializable for String
 {
-    fn deserialize(bytes: &mut bytes::Bytes) -> Self
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
-        let len = bytes.get_u32() as usize;
+        let len = bytes.try_get_u32()? as usize;
         let slice = bytes.copy_to_bytes(len);
-        String::from_utf8(slice.to_vec()).unwrap()
+        String::from_utf8(slice.to_vec()).map_err(|e| { SerializationError::InvalidDeserializationState })
     }
-}
-
-fn serialize_f32(value: NotNan<f32>) -> [u8; 2]
-{
-    let value = value * 100.0;
-    let value = value.trunc() as i16;
-    value.to_be_bytes()
-}
-
-fn deserialize_f32(bytes: &mut bytes::Bytes) -> NotNan<f32>
-{
-    let value = bytes.get_i16();
-    unsafe { NotNan::new_unchecked(value as f32 / 100.0) }
 }

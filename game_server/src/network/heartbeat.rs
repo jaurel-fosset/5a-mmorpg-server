@@ -61,7 +61,7 @@ impl HeartbeatNetworkPlugin
 
         let packet = HeartbeatPacket
         {
-            ip: environment.ip.to_string(),
+            ip: environment.ip.to_string().parse().unwrap(),
             port: environment.port,
             player_number: clients.num_clients(),
             player_capacity: environment.player_capacity,
@@ -69,7 +69,17 @@ impl HeartbeatNetworkPlugin
             ram_load: ram_load as u8,
         }.write();
 
-        println!("Sending heartbeat");
+        let packet = match packet
+        {
+            Ok(packet) => packet,
+            Err(_) =>
+            {
+                info!("Failed to write heartbeat packet");
+                return;
+            },
+        };
+
+        trace!("Sending heartbeat");
 
         if let Err(error) = server.socket.send(&orchestrator, heartbeat_stream, packet)
         {
