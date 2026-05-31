@@ -130,7 +130,7 @@ impl Serializable for String
     fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
     {
         let bytes = self.as_bytes();
-        stream.put_u32(bytes.len() as u32); // longueur préfixée
+        stream.put_u32(bytes.len() as u32);
         stream.put_slice(bytes);
         Ok(())
     }
@@ -143,5 +143,45 @@ impl Deserializable for String
         let len = bytes.try_get_u32()? as usize;
         let slice = bytes.copy_to_bytes(len);
         String::from_utf8(slice.to_vec()).map_err(|e| { SerializationError::InvalidDeserializationState })
+    }
+}
+
+impl<T: Serializable, const N: usize> Serializable for [T; N] {
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError> {
+        for element in self {
+            element.serialize(stream)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: Deserializable, const N: usize> Deserializable for [T; N] {
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError> {
+        let mut vec = Vec::with_capacity(N);
+        for _ in 0..N {
+            vec.push(T::deserialize(bytes)?);
+        }
+        vec.try_into().map_err(|_| SerializationError::InvalidDeserializationState)
+    }
+}
+
+impl<T: Serializable> Serializable for Vec<T> {
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError> {
+        (self.len() as u64).serialize(stream)?;
+        for element in self {
+            element.serialize(stream)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: Deserializable> Deserializable for Vec<T> {
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError> {
+        let len = u64::deserialize(bytes)? as usize;
+        let mut vec = Vec::with_capacity(len);
+        for _ in 0..len {
+            vec.push(T::deserialize(bytes)?);
+        }
+        Ok(vec)
     }
 }
