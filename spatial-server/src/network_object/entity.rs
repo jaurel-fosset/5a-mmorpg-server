@@ -46,6 +46,16 @@ impl Entity
         }
     }
     
+    pub fn position(&self) -> &geo::Position
+    {
+        &self.position
+    }
+    
+    pub fn current_shard(&self) -> ShardId
+    {
+        self.current_shard
+    }
+    
     pub fn update_subscription(&mut self, shards: HashSet<ShardId>) -> Vec<ShardId>
     {
         let removed = self.subscribed_shard.difference(&shards)

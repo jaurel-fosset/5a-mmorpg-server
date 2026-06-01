@@ -140,6 +140,11 @@ impl Shard
             subscribe_bound,
         }
     }
+
+    pub fn in_subscribe_range(&self, position: geo::Position) -> bool
+    {
+        position.overlap_rect(self.subscribe_bound)
+    }
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
