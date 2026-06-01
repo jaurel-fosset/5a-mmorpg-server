@@ -23,6 +23,22 @@ impl ShardManager
         }
     }
 
+    pub fn get_shard(&mut self, id: ShardId) -> Option<&mut Shard>
+    {
+    self.shards.get_mut(&id)
+    }
+
+    pub fn resolve_id(&mut self, id: ShardId) -> ShardId
+    {
+        let mut resolved_id = id;
+        while let Some(new_id) = self.replaced_shards.get(&resolved_id)
+        {
+            resolved_id = *new_id;
+        }
+
+        resolved_id
+    }
+
     pub fn new_shard(&mut self, authority_bounds: geo::Rect, subscribe_bounds: geo::Rect) -> Option<ShardId>
     {
         let shard_id = self.get_free_shard()?;
