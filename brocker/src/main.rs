@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use game_sockets::{GameConnection, GamePeer, GameStream};
 use network_serialization::packet::{PacketData, PacketMessage};
-use network_serialization::packets::broker::{BroadcastPacket, ClientInputBrokerPacket};
+use network_serialization::packets::broker::{BroadcastPacket};
 use network_serialization::packets::Packet;
 use network_serialization::packets::shard::ClientInputShardPacket;
 
@@ -50,7 +50,7 @@ async fn main() {
             Ok(Some(game_sockets::GameNetworkEvent::Message { connection, stream, data })) => {
                 println!("Got message from peer: {:?}", connection);
                 let msg = PacketMessage::read(data).unwrap();
-
+                println!("Packet content {:?}", msg);
                 let connection_data = ConnectionData{ connection, stream };
 
                 match msg.data {
@@ -58,7 +58,7 @@ async fn main() {
                     PacketData::Unsubscribe(packet) => unsubscribe_client(&mut broker, connection_data, packet.client_id, packet.topic),
                     PacketData::Publish(packet) => publish_shard_state(&mut broker, connection_data, packet.topic, packet.payload),
                     PacketData::ClientInputBroker(packet) => handle_player_input(&mut broker, connection_data, packet.input),
-                    PacketData::RegisterPlayer(packet) => register_player(&mut broker, connection_data),
+                    PacketData::RegisterPlayer(_) => register_player(&mut broker, connection_data),
                     _ => println!("Unexpected message received")
                 }
             }
