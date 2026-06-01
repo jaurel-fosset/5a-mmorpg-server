@@ -1,5 +1,5 @@
-﻿pub mod position;
-pub mod rect;
-pub mod line;
-pub mod circle;
+﻿mod position;
+mod rect;
+mod line;
+mod circle;
 pub mod prelude;
