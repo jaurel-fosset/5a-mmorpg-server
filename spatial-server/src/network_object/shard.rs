@@ -124,9 +124,9 @@ impl ShardManager
 
 pub struct Shard
 {
-    entities_count: usize,
-    authority_bound: geo::Rect,
-    subscribe_bound: geo::Rect,
+    pub entities_count: usize,
+    pub authority_bound: geo::Rect,
+    pub subscribe_bound: geo::Rect,
 }
 
 impl Shard
@@ -144,3 +144,8 @@ impl Shard
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct ShardId(u64);
+
+pub enum ShardManagerError
+{
+    ShardNotFoundError,
+}
