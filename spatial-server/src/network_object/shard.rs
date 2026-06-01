@@ -28,6 +28,16 @@ impl ShardManager
     self.shards.get_mut(&id)
     }
 
+    pub fn update_shard(&mut self, id: ShardId, authority_bounds: geo::Rect, load: usize) -> Option<()>
+    {
+        let shard = self.shards.get_mut(&id).unwrap();
+        shard.entities_count = load;
+        shard.authority_bound = authority_bounds;
+        shard.subscribe_bound = authority_bounds; // TODO : calculate real subscribe bound
+
+        Some(())
+    }
+
     pub fn resolve_id(&mut self, id: ShardId) -> ShardId
     {
         let mut resolved_id = id;
@@ -49,7 +59,31 @@ impl ShardManager
         Some(shard_id)
     }
 
+    pub fn release_shard(&mut self, shard_id: ShardId)
+    {
+        self.shards.remove(&shard_id);
+        self.free_shards.insert(shard_id, time::Instant::now());
+    }
+
+    pub fn new_shard_with_capacity(&mut self, authority_bounds: geo::Rect, subscribe_bounds: geo::Rect, capacity: usize) -> Option<ShardId>
+    {
+        let shard_id = self.get_free_shard()?;
+
+        self.free_shards.remove(&shard_id);
+
+        let shard = Shard
+        {
+            entities_count: capacity,
+            authority_bound: authority_bounds,
+            subscribe_bound: subscribe_bounds,
+        };
+        self.shards.insert(shard_id, shard);
+
+        Some(shard_id)
+    }
+
     // TODO : implement a function to clean up replaced shard
+    // TODO : implement function to de allocate shards in free list after some inactivity time
 
     pub fn on_receive_shard_creation(&mut self, shard_created: ShardId)
     {
@@ -139,6 +173,11 @@ impl Shard
             authority_bound,
             subscribe_bound,
         }
+    }
+
+    pub fn in_subscribe_range(&self, position: geo::Position) -> bool
+    {
+        position.overlap_rect(self.subscribe_bound)
     }
 }
 
