@@ -1,5 +1,6 @@
 ﻿use std::marker::PhantomData;
 use crate::geometry::prelude::*;
+use crate::network_object::entity::{Entity, EntityId};
 use crate::network_object::shard::{Shard, ShardId, ShardManager};
 
 pub struct QuadTree
@@ -46,7 +47,7 @@ impl QuadTree
         }
     }
 
-    pub fn split_and_fuse(&mut self, shard_manager: &mut ShardManager)
+    pub fn split_and_fuse(&mut self, shard_manager: &mut ShardManager, entities: &[Entity])
     {
         let mut node_to_visit = vec![self.root];
         loop
@@ -61,18 +62,18 @@ impl QuadTree
             {
                 QuadTreeNodeType::Node(children) =>
                 {
-                    let mut is_all_children = true;
+                    let mut is_all_leaf = true;
                     for child in children
                     {
                         if let QuadTreeNodeType::Node(_) = self.nodes[child].node_type
                         {
-                            is_all_children = false;
+                            is_all_leaf = false;
                         }
 
                         node_to_visit.push(child);
                     }
 
-                    if is_all_children
+                    if is_all_leaf
                     {
                         let mut missing_shard = false;
 
@@ -114,8 +115,7 @@ impl QuadTree
                             continue;
                         }
                         
-                        self.fuse(current_node, shard_manager);
-                        // TODO : implement fuse method, putting all but one shard back into the free list
+                        self.fuse(current_node, shard_manager, shards_load);
                     }
                 }
                 QuadTreeNodeType::Leaf(shard_id) =>
@@ -128,8 +128,8 @@ impl QuadTree
 
                     if shard.entities_count < PLAYER_LIMIT
                     {
-                        self.split_leaf(current_node, shard_manager);
-                        // TODO : refactor split leaf to split if there are shards in the free list, otherwise asks for more shards
+                        self.split_leaf(current_node, shard_manager, entities);
+                        // TODO : Add 3 more shards to the total to request
                     }
                 }
             }
@@ -185,18 +185,80 @@ impl QuadTree
         self.nodes[leaf].node_type = QuadTreeNodeType::Node(quadrants);
     }
     
-    pub fn split_leaf(&mut self, leaf: usize)
+    pub fn split_leaf(&mut self, leaf: usize, shard_manager: &mut ShardManager, entities: &[Entity]) -> Option<()>
     {
         let quadrants = self.nodes[leaf].bounds.divide();
+        let counts = Self::split_entity_count(quadrants, entities);
+     
+        let old_shard_id = match self.nodes[leaf].node_type
+        {
+            QuadTreeNodeType::Leaf(shard) => shard,
+            QuadTreeNodeType::Node(_) => return None,
+        };
+        shard_manager.release_shard(old_shard_id);
+        
         let quadrants =
         [
-            self.new_leaf(quadrants[0]),
-            self.new_leaf(quadrants[1]),
-            self.new_leaf(quadrants[2]),
-            self.new_leaf(quadrants[3]),
+            self.new_leaf(quadrants[0],
+                          shard_manager.new_shard_with_capacity(quadrants[0], quadrants[0], counts[0])?),
+            self.new_leaf(quadrants[1],
+                          shard_manager.new_shard_with_capacity(quadrants[1], quadrants[1], counts[1])?),
+            self.new_leaf(quadrants[2],
+                          shard_manager.new_shard_with_capacity(quadrants[2], quadrants[2], counts[2])?),
+            self.new_leaf(quadrants[3],
+                          shard_manager.new_shard_with_capacity(quadrants[3], quadrants[3], counts[3])?),
         ];
         
-        self.into_node(leaf, quadrants)
+        self.into_node(leaf, quadrants);
+        Some(())
+    }
+
+    fn split_entity_count(quadrants: [Rect; 4], entities: &[Entity]) -> [usize; 4]
+    {
+        [
+            entities.iter()
+                .filter(|entity| { entity.position().overlap_rect(quadrants[0]) })
+                .count(),
+            entities.iter()
+                .filter(|entity| { entity.position().overlap_rect(quadrants[1]) })
+                .count(),
+            entities.iter()
+                .filter(|entity| { entity.position().overlap_rect(quadrants[2]) })
+                .count(),
+            entities.iter()
+                .filter(|entity| { entity.position().overlap_rect(quadrants[3]) })
+                .count(),
+        ]
+    }
+    
+    pub fn fuse(&mut self, parent: usize, shard_manager: &mut ShardManager, shards_load: usize) -> Option<()>
+    {
+        let mut children = match self.nodes[parent].node_type
+        {
+            QuadTreeNodeType::Node(children) => children.to_vec(),
+            QuadTreeNodeType::Leaf(_) => return None,
+        };
+        
+        let node = self.nodes.get_mut(children.pop().unwrap()).unwrap();
+        let shard_id = match node.node_type
+        {
+            QuadTreeNodeType::Node(_) => unreachable!(),
+            QuadTreeNodeType::Leaf(shard) => shard,
+        };
+        shard_manager.update_shard(shard_id,node.bounds, shards_load);
+        
+        for child in children
+        {
+            let shard_id = match self.nodes[child].node_type
+            {
+                QuadTreeNodeType::Node(_) => unreachable!(),
+                QuadTreeNodeType::Leaf(shard) => shard,
+            };
+            
+            shard_manager.release_shard(shard_id);
+        }
+        
+        Some(())
     }
 
     pub fn leaf_for(&self, position: Position) -> Option<usize>
