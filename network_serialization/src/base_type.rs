@@ -1,4 +1,4 @@
-﻿use bytes::{Buf, BufMut};
+﻿use bytes::{Buf, BufMut, BytesMut};
 use crate::{Deserializable, Serializable, SerializationError};
 
 impl Serializable for f32
@@ -143,5 +143,35 @@ impl Deserializable for String
         let len = bytes.try_get_u32()? as usize;
         let slice = bytes.copy_to_bytes(len);
         String::from_utf8(slice.to_vec()).map_err(|e| { SerializationError::InvalidDeserializationState })
+    }
+}
+
+impl<T: Serializable> Serializable for Vec<T>
+{
+    fn serialize(self, stream: &mut BytesMut) -> Result<(), SerializationError>
+    {
+        stream.put_u64(self.len() as u64);
+        for item in self
+        {
+            item.serialize(stream)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl<T: Deserializable> Deserializable for Vec<T>
+{
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
+    {
+        let len = u64::deserialize(bytes)?;
+        let mut vec = Vec::with_capacity(len as usize);
+
+        for _ in 0..len
+        {
+            vec.push(T::deserialize(bytes)?);
+        }
+
+        Ok(vec)
     }
 }
