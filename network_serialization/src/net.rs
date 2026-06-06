@@ -20,7 +20,23 @@ impl Deserializable for Ipv4Addr
     }
 }
 
-// TODO : implement Serialization for Ipv6Addr
+impl Serializable for Ipv6Addr
+{
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
+    {
+        self.to_bits().serialize(stream)?;
+        Ok(())
+    }
+}
+
+impl Deserializable for Ipv6Addr
+{
+    fn deserialize(stream: &mut bytes::Bytes) -> Result<Self, SerializationError>
+    {
+        let bits = u128::deserialize(stream)?;
+        Ok(Self::from_bits(bits))
+    }
+}
 
 impl Serializable for NetworkId
 {
