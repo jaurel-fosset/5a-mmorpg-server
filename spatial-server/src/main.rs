@@ -53,19 +53,13 @@ fn shard_in_subscribe_range(quad_tree: &mut QuadTree, shard_manager: &mut ShardM
         radius: MAX_AUTHORITY_SWITCH_RANGE,
     };
 
-    quad_tree.shards_near(subscribe_range)
-        .iter()
+    quad_tree.shards_near(shard_manager, subscribe_range)
+        .into_iter()
         .filter(|shard_id|
         {
-            let shard = match shard_manager.get_shard(**shard_id)
-            {
-                Some(shard) => shard,
-                None => return false,
-            };
-
-            shard.in_subscribe_range(entity)
+            shard_manager.in_subscribe_range(*shard_id, entity)
+                .expect("All the shard returned by the quad tree should be valid")
         })
-        .copied()
         .collect()
 }
 

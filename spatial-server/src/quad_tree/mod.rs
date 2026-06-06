@@ -1,6 +1,6 @@
 ﻿use crate::geometry::prelude::*;
 use crate::network_object::entity::Entity;
-use crate::network_object::shard::{ShardId, ShardManager};
+use crate::network_object::shard::{ShardId, ShardManager, ShardManagerError};
 
 pub struct QuadTree
 {
@@ -72,25 +72,20 @@ impl QuadTree
                     {
                         let mut missing_shard = false;
 
-                        let shards_load = children.iter()
-                            .map(|child| {
-                                let shard_id = match self.nodes[*child].node_type
+                        let shards_load = children.into_iter()
+                            .map(|child|
+                            {
+                                let entity_count = match self.get_entity_count(shard_manager, child)
                                 {
-                                    QuadTreeNodeType::Node(_) => unreachable!(),
-                                    QuadTreeNodeType::Leaf(shard) => shard,
-                                };
-
-                                let shard = match shard_manager.get_shard(shard_id)
-                                {
-                                    Some(shard) => shard,
+                                    Some(entity_count) => entity_count,
                                     None =>
-                                        {
-                                            missing_shard = true;
-                                            return None;
-                                        },
+                                    {
+                                        missing_shard = true;
+                                        return None;
+                                    }
                                 };
 
-                                Some(shard.entities_count)
+                                Some(entity_count)
                             })
                             .fold(0_usize, |acc, entities_count| {
                                 match entities_count
@@ -113,15 +108,15 @@ impl QuadTree
                         self.fuse(current_node, shard_manager, shards_load);
                     }
                 }
-                QuadTreeNodeType::Leaf(shard_id) =>
+                QuadTreeNodeType::Leaf(_) =>
                 {
-                    let shard = match shard_manager.get_shard(shard_id)
+                    let entity_count = match self.get_entity_count(shard_manager, current_node)
                     {
-                        Some(shard) => shard,
+                        Some(entity_count) => entity_count,
                         None => continue,
                     };
 
-                    if shard.entities_count < PLAYER_LIMIT
+                    if entity_count < PLAYER_LIMIT
                     {
                         self.split_leaf(current_node, shard_manager, entities);
                         shard_allocation_count += 3;
@@ -133,43 +128,35 @@ impl QuadTree
         shard_allocation_count
     }
     
-    // pub fn tmp(shard_generator: &mut ShardGenerator, map_bounds: Rect, entities: &[Position]) -> Self
-    // {
-    //     if entities.len() <= PLAYER_LIMIT
-    //     {
-    //         return Self
-    //         {
-    //             bounds: map_bounds,
-    //             inner: QuadTreeInner::Leaf(shard_generator.get_shard()),
-    //         };
-    //     }
-    // 
-    //     let entites_quadrant = |bound: Rect|
-    //         {
-    //             entities.iter().copied()
-    //                 .filter(|entity| entity.overlap_rect(bound))
-    //                 .collect::<Vec<_>>()
-    //         };
-    // 
-    //     let quadrant_bounds = map_bounds.divide();
-    // 
-    //     let entities_0 = entites_quadrant(quadrant_bounds[0]);
-    //     let entities_1 = entites_quadrant(quadrant_bounds[0]);
-    //     let entities_2 = entites_quadrant(quadrant_bounds[0]);
-    //     let entities_3 = entites_quadrant(quadrant_bounds[0]);
-    // 
-    // 
-    //     Self
-    //     {
-    //         bounds: map_bounds,
-    //         inner: QuadTreeInner::Node([
-    //             Box::new(Self::new(shard_generator, quadrant_bounds[0], entities_0.as_ref())),
-    //             Box::new(Self::new(shard_generator, quadrant_bounds[1], entities_1.as_ref())),
-    //             Box::new(Self::new(shard_generator, quadrant_bounds[2], entities_2.as_ref())),
-    //             Box::new(Self::new(shard_generator, quadrant_bounds[3], entities_3.as_ref())),
-    //         ]),
-    //     }
-    // }
+    fn get_entity_count(&mut self, shard_manager: &mut ShardManager, leaf: usize) -> Option<usize>
+    {
+        match self.nodes[leaf].node_type
+        {
+            QuadTreeNodeType::Node(_) => None,
+            QuadTreeNodeType::Leaf(ref mut shard_id) =>
+            {
+                match shard_manager.get_entity_count(*shard_id)
+                {
+                    Ok(count) => Some(count),
+                    Err(error) =>
+                    {
+                        match error
+                        {
+                            ShardManagerError::ShardNotFound => None,
+                            ShardManagerError::ShardReplaced(new_id) =>
+                            {
+                                *shard_id = new_id;
+                                
+                                let entity_count = shard_manager.get_entity_count(new_id)
+                                    .expect("If the resolved id was not present, we would have gotten ShardNotFound");
+                                Some(entity_count)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     fn new_leaf(&mut self, bounds: Rect, shard: ShardId) -> usize
     {
@@ -300,7 +287,7 @@ impl QuadTree
         }
     }
 
-    pub fn shards_near(&self, circle: Circle) -> Vec<ShardId>
+    pub fn shards_near(&self, shard_manager: &mut ShardManager, circle: Circle) -> Vec<ShardId>
     {
         let mut shards = Vec::new();
 
@@ -329,7 +316,19 @@ impl QuadTree
                 }
                 QuadTreeNodeType::Leaf(shard_id) =>
                 {
-                    shards.push(shard_id);
+                    if shard_manager.should_resolve(shard_id)
+                    {
+                        let resolved = match shard_manager.resolve_id(shard_id)
+                        {
+                            Some(resolved) => resolved,
+                            None => continue,
+                        };
+                        shards.push(resolved);
+                    }
+                    else
+                    {
+                        shards.push(shard_id);
+                    }
                 }
             }
         }
