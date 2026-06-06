@@ -1,7 +1,6 @@
-﻿use std::marker::PhantomData;
-use crate::geometry::prelude::*;
-use crate::network_object::entity::{Entity, EntityId};
-use crate::network_object::shard::{Shard, ShardId, ShardManager};
+﻿use crate::geometry::prelude::*;
+use crate::network_object::entity::Entity;
+use crate::network_object::shard::{ShardId, ShardManager};
 
 pub struct QuadTree
 {
@@ -47,17 +46,13 @@ impl QuadTree
         }
     }
 
-    pub fn split_and_fuse(&mut self, shard_manager: &mut ShardManager, entities: &[Entity])
+    pub fn split_and_fuse(&mut self, shard_manager: &mut ShardManager, entities: &[Entity]) -> usize
     {
+        let mut shard_allocation_count = 0;
         let mut node_to_visit = vec![self.root];
-        loop
+        
+        while let Some(current_node) = node_to_visit.pop()
         {
-            let current_node = match node_to_visit.pop()
-            {
-                Some(node) => node,
-                None => return,
-            };
-
             match self.nodes[current_node].node_type
             {
                 QuadTreeNodeType::Node(children) =>
@@ -129,11 +124,13 @@ impl QuadTree
                     if shard.entities_count < PLAYER_LIMIT
                     {
                         self.split_leaf(current_node, shard_manager, entities);
-                        // TODO : Add 3 more shards to the total to request
+                        shard_allocation_count += 3;
                     }
                 }
             }
         }
+        
+        shard_allocation_count
     }
     
     // pub fn tmp(shard_generator: &mut ShardGenerator, map_bounds: Rect, entities: &[Position]) -> Self
@@ -180,7 +177,7 @@ impl QuadTree
         self.nodes.len() - 1
     }
     
-    fn into_node(&mut self, leaf: usize, quadrants: [usize; 4])
+    fn leaf_to_node(&mut self, leaf: usize, quadrants: [usize; 4])
     {
         self.nodes[leaf].node_type = QuadTreeNodeType::Node(quadrants);
     }
@@ -209,7 +206,7 @@ impl QuadTree
                           shard_manager.new_shard_with_capacity(quadrants[3], quadrants[3], counts[3])?),
         ];
         
-        self.into_node(leaf, quadrants);
+        self.leaf_to_node(leaf, quadrants);
         Some(())
     }
 
@@ -295,9 +292,10 @@ impl QuadTree
     pub fn shard_for(&self, position: Position) -> Option<ShardId>
     {
         let leaf = self.leaf_for(position)?;
+        
         match self.nodes[leaf].node_type
         {
-            QuadTreeNodeType::Node(children) => None,
+            QuadTreeNodeType::Node(_) => None,
             QuadTreeNodeType::Leaf(shard) => Some(shard)
         }
     }

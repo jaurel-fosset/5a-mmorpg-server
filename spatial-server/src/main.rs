@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::io::empty;
 use spatial_server::geometry::prelude::*;
 use spatial_server::network_object::entity::Entity;
 use spatial_server::network_object::shard::{ShardId, ShardManager};
@@ -7,14 +6,15 @@ use spatial_server::quad_tree::QuadTree;
 
 const MAX_AUTHORITY_SWITCH_RANGE: f32 = 100.0;
 
-fn update(quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entities: &[Entity])
+fn update(quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entities: &mut [Entity])
 {
-    for mut entity in entities
+    for entity in entities.iter_mut()
     {
-        handle_authority_switch(quad_tree, shard_manager, &mut entity);
+        handle_authority_switch(quad_tree, shard_manager, entity);
     }
 
-    quad_tree.split_and_fuse(shard_manager);
+    let shards_to_allocate = quad_tree.split_and_fuse(shard_manager, entities);
+    // TODO : send packet to request allocation for shards
 }
 
 fn handle_authority_switch(quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
@@ -49,7 +49,7 @@ fn shard_in_subscribe_range(quad_tree: &mut QuadTree, shard_manager: &mut ShardM
 {
     let subscribe_range = Circle
     {
-        center: *entity,
+        center: entity,
         radius: MAX_AUTHORITY_SWITCH_RANGE,
     };
 

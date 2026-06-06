@@ -83,6 +83,7 @@ impl ShardManager
     }
 
     // TODO : implement a function to clean up replaced shard
+    // TODO : implement function to de allocate shards in free list after some inactivity time
 
     pub fn on_receive_shard_creation(&mut self, shard_created: ShardId)
     {
