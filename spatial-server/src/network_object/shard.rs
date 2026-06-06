@@ -4,6 +4,7 @@ use std::time;
 use std::time::{Duration, Instant};
 use crate::geometry::prelude as geo;
 use thiserror;
+use crate::network_object::request_more_shards;
 
 pub struct ShardManager
 {
@@ -188,7 +189,7 @@ impl ShardManager
             {
                 println!("Requesting another shard created");
                 self.deleted_in_use.insert(deleted_shard, (time::Instant::now(), shard));
-                // TODO : request new shard on the network
+                request_more_shards(1);
                 return;
             }
         };

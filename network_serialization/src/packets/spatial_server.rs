@@ -1,10 +1,19 @@
-﻿use bytes::{Bytes, BytesMut};
+﻿use std::net::Ipv6Addr;
+use bytes::{Bytes, BytesMut};
 use crate::*;
 use crate::packets::Packet;
 
 pub struct AllocateShardsPacket
 {
     shard_count: u64,
+}
+
+impl AllocateShardsPacket
+{
+    pub fn new(shard_count: u64) -> AllocateShardsPacket
+    {
+        Self { shard_count }
+    }
 }
 
 impl Packet for AllocateShardsPacket
@@ -28,7 +37,7 @@ impl Packet for AllocateShardsPacket
 
 pub struct DeAllocateShardsPacket
 {
-    shards: Vec<NetworkId>
+    shards: Vec<Ipv6Addr>
 }
 
 impl Packet for DeAllocateShardsPacket
@@ -37,7 +46,7 @@ impl Packet for DeAllocateShardsPacket
     where
         Self: Sized
     {
-        let shards: Vec<NetworkId> = Vec::deserialize(&mut bytes)?;
+        let shards = Vec::deserialize(&mut bytes)?;
         Ok(Self { shards })
     }
 
@@ -52,7 +61,7 @@ impl Packet for DeAllocateShardsPacket
 
 pub struct ShardCreationPacket
 {
-    shards: Vec<NetworkId>
+    shards: Vec<Ipv6Addr>
 }
 
 impl Packet for ShardCreationPacket
@@ -61,7 +70,7 @@ impl Packet for ShardCreationPacket
     where
         Self: Sized
     {
-        let shards: Vec<NetworkId> = Vec::deserialize(&mut bytes)?;
+        let shards = Vec::deserialize(&mut bytes)?;
         Ok(Self { shards })
     }
 
@@ -76,7 +85,7 @@ impl Packet for ShardCreationPacket
 
 pub struct ShardDestructionPacket
 {
-    shard: NetworkId
+    shard: Ipv6Addr,
 }
 
 impl Packet for ShardDestructionPacket
@@ -85,7 +94,7 @@ impl Packet for ShardDestructionPacket
     where
         Self: Sized
     {
-        let shard = NetworkId::deserialize(&mut bytes)?;
+        let shard = Ipv6Addr::deserialize(&mut bytes)?;
         Ok(Self { shard })
     }
 
