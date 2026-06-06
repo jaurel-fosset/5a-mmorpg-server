@@ -1,6 +1,9 @@
 ﻿use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::time;
+use std::time::{Duration, Instant};
 use crate::geometry::prelude as geo;
+use thiserror;
 
 pub struct ShardManager
 {
@@ -9,6 +12,8 @@ pub struct ShardManager
     replaced_shards: HashMap<ShardId, ShardId>,
     free_shards: HashMap<ShardId, time::Instant>,
 }
+
+const MAX_IDLE_TIME: Duration = Duration::from_secs(10);
 
 impl ShardManager
 {
@@ -23,9 +28,37 @@ impl ShardManager
         }
     }
 
-    pub fn get_shard(&mut self, id: ShardId) -> Option<&mut Shard>
+    pub fn get_entity_count(&self, id: ShardId) -> Result<usize, ShardManagerError>
     {
-    self.shards.get_mut(&id)
+        self.get_shard_resolved(id)
+            .map(|shard| shard.entities_count)
+    }
+
+    pub fn in_subscribe_range(&mut self, id: ShardId, position: geo::Position) -> Result<bool, ShardManagerError>
+    {
+        self.get_shard_resolved(id)
+            .map(|shard| shard.in_subscribe_range(position))
+    }
+
+    fn get_shard_resolved(&self, id: ShardId) -> Result<&Shard, ShardManagerError>
+    {
+        if let Some(shard) = self.shards.get(&id)
+        {
+            return Ok(shard);
+        }
+
+        match self.resolve_id(id)
+        {
+            Some(new_id) =>
+                {
+                    if self.shards.contains_key(&new_id)
+                    {
+                        Err(ShardManagerError::ShardReplaced(new_id))
+                    }
+                    else { Err(ShardManagerError::ShardNotFound) }
+                }
+            None => Err(ShardManagerError::ShardNotFound),
+        }
     }
 
     pub fn update_shard(&mut self, id: ShardId, authority_bounds: geo::Rect, load: usize) -> Option<()>
@@ -33,20 +66,25 @@ impl ShardManager
         let shard = self.shards.get_mut(&id).unwrap();
         shard.entities_count = load;
         shard.authority_bound = authority_bounds;
-        shard.subscribe_bound = authority_bounds; // TODO : calculate real subscribe bound
+        shard.subscribe_bound = authority_bounds.subscribe_rect();
 
         Some(())
     }
 
-    pub fn resolve_id(&mut self, id: ShardId) -> ShardId
+    pub fn should_resolve(&self, id: ShardId) -> bool
     {
-        let mut resolved_id = id;
-        while let Some(new_id) = self.replaced_shards.get(&resolved_id)
+        self.shards.contains_key(&id)
+    }
+
+    pub fn resolve_id(&self, id: ShardId) -> Option<ShardId>
+    {
+        let mut resolved_id = self.replaced_shards.get(&id)?;
+        while let Some(new_id) = self.replaced_shards.get(resolved_id)
         {
-            resolved_id = *new_id;
+            resolved_id = new_id;
         }
 
-        resolved_id
+        Some(*resolved_id)
     }
 
     pub fn new_shard(&mut self, authority_bounds: geo::Rect, subscribe_bounds: geo::Rect) -> Option<ShardId>
@@ -82,8 +120,19 @@ impl ShardManager
         Some(shard_id)
     }
 
-    // TODO : implement a function to clean up replaced shard
-    // TODO : implement function to de allocate shards in free list after some inactivity time
+    pub fn clean_up_replaced(&mut self, shard_id: ShardId)
+    {
+        self.replaced_shards.remove(&shard_id);
+    }
+
+    pub fn clean_up_free_shards(&mut self)
+    {
+        self.free_shards
+            .retain(|_, instant|
+            {
+                *instant - Instant::now() < MAX_IDLE_TIME
+            });
+    }
 
     pub fn on_receive_shard_creation(&mut self, shard_created: ShardId)
     {
@@ -184,7 +233,20 @@ impl Shard
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub struct ShardId(u64);
 
+impl Display for ShardId
+{
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result
+    {
+        write!(formatter, "ShardId({})", self.0)
+    }
+}
+
+
+#[derive(thiserror::Error, Debug)]
 pub enum ShardManagerError
 {
-    ShardNotFoundError,
+    #[error("Shard was not found")]
+    ShardNotFound,
+    #[error("Shard was destroyed and replaced by {0}")]
+    ShardReplaced(ShardId),
 }

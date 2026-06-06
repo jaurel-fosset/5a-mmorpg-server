@@ -9,6 +9,8 @@ pub struct Rect
     pub height: f32,
 }
 
+const SUBSCRIBE_RANGE_PERCENTAGE: f32 = 0.1;
+
 impl Rect
 {
     pub fn divide(self) -> [Rect; 4]
@@ -21,6 +23,17 @@ impl Rect
             Rect { x: self.x + half_width, y: self.y + half_height, width: half_width, height: half_height },
             Rect { x: self.x, y: self.y + half_height, width: half_width, height: half_height },
         ]
+    }
+    
+    pub fn subscribe_rect(&self) -> Self
+    {
+        Self
+        {
+            x: self.x * (1.0 - SUBSCRIBE_RANGE_PERCENTAGE),
+            y: self.y * (1.0 - SUBSCRIBE_RANGE_PERCENTAGE),
+            width: self.width * (1.0 + SUBSCRIBE_RANGE_PERCENTAGE),
+            height: self.height * (1.0 + SUBSCRIBE_RANGE_PERCENTAGE),
+        }
     }
     
     pub fn overlap_circle(self, circle: Circle) -> bool
