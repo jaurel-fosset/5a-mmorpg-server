@@ -1,9 +1,10 @@
 ﻿use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::net::Ipv6Addr;
 use std::time;
-use std::time::{Duration, Instant};
 use crate::geometry::prelude as geo;
 use thiserror;
+use crate::network_object::request_more_shards;
 
 pub struct ShardManager
 {
@@ -13,7 +14,7 @@ pub struct ShardManager
     free_shards: HashMap<ShardId, time::Instant>,
 }
 
-const MAX_IDLE_TIME: Duration = Duration::from_secs(10);
+const MAX_IDLE_TIME: time::Duration = time::Duration::from_secs(10);
 
 impl ShardManager
 {
@@ -130,25 +131,29 @@ impl ShardManager
         self.free_shards
             .retain(|_, instant|
             {
-                *instant - Instant::now() < MAX_IDLE_TIME
+                *instant - time::Instant::now() < MAX_IDLE_TIME
             });
     }
 
-    pub fn on_receive_shard_creation(&mut self, shard_created: ShardId)
+    pub fn on_receive_shard_creation(&mut self, shard_address: Ipv6Addr)
     {
+        let shard_id = ShardId::new(shard_address);
+        
         match self.get_deleted_in_use_shard()
         {
-            None => {}
+            None =>
+            {
+                self.free_shards.insert(shard_id, time::Instant::now());
+            }
             Some(deleted_shard_id) =>
             {
                 let (_, deleted_shard) = &self.deleted_in_use[&deleted_shard_id];
 
-                self.shards.insert(shard_created, Shard::new(deleted_shard.authority_bound, deleted_shard.subscribe_bound));
-                self.replaced_shards.insert(deleted_shard_id, shard_created);
+                self.shards.insert(shard_id, Shard::new(deleted_shard.authority_bound, deleted_shard.subscribe_bound));
+                self.replaced_shards.insert(deleted_shard_id, shard_id);
                 self.deleted_in_use.remove(&deleted_shard_id);
             }
         }
-        self.free_shards.insert(shard_created, time::Instant::now());
     }
 
     pub fn on_receive_shard_deletion(&mut self, deleted_shard: ShardId)
@@ -188,7 +193,7 @@ impl ShardManager
             {
                 println!("Requesting another shard created");
                 self.deleted_in_use.insert(deleted_shard, (time::Instant::now(), shard));
-                // TODO : request new shard on the network
+                request_more_shards(1);
                 return;
             }
         };
@@ -231,7 +236,15 @@ impl Shard
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub struct ShardId(u64);
+pub struct ShardId(Ipv6Addr);
+
+impl ShardId
+{
+    fn new(ip: Ipv6Addr) -> Self
+    {
+        ShardId(ip)
+    }
+}
 
 impl Display for ShardId
 {

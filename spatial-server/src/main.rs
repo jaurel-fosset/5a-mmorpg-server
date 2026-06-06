@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use spatial_server::geometry::prelude::*;
 use spatial_server::network_object::entity::Entity;
+use spatial_server::network_object::{request_more_shards, switch_authority};
 use spatial_server::network_object::shard::{ShardId, ShardManager};
 use spatial_server::quad_tree::QuadTree;
 
@@ -14,7 +15,7 @@ fn update(quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entities: 
     }
 
     let shards_to_allocate = quad_tree.split_and_fuse(shard_manager, entities);
-    // TODO : send packet to request allocation for shards
+    request_more_shards(shards_to_allocate as u64);
 }
 
 fn handle_authority_switch(quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
@@ -40,7 +41,7 @@ fn handle_authority_switch(quad_tree: &mut QuadTree, shard_manager: &mut ShardMa
 
     if current_shard != previous_shard
     {
-        // TODO : send packet to notify new and old shard of the authority change
+        switch_authority(current_shard, previous_shard, entity);
         entity.switch_current_shard(current_shard);
     }
 }
