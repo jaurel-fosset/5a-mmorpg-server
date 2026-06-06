@@ -34,3 +34,5 @@ impl From<TryGetError> for SerializationError
 {
     fn from(_: TryGetError) -> Self { Self::NotEnoughBits }
 }
+
+pub struct NetworkId(u64);
