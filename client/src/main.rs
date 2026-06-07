@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 use bevy::prelude::*;
 use bevy_egui::egui::{Align2, Context};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
-use game_sockets::{GameConnection, GameNetworkEvent, GameStream, GameStreamReliability};
+use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream, GameStreamReliability};
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::broker::ClientHelloPacket;
 use network_serialization::packets::Packet;
@@ -11,8 +11,13 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin::default())
+
         .init_resource::<ConnectionSettings>()
+        .init_resource::<NetworkState>()
+        .init_resource::<PlayerInput>()
+
         .add_systems(Startup, setup_camera_system)
+        .add_systems(Update, (handle_input_system, send_inputs_to_network_system))
         .add_systems(EguiPrimaryContextPass, ui_example_system)
         .run();
 }
@@ -21,7 +26,6 @@ fn main() {
 struct ConnectionSettings {
     ip_address: String,
     ip_port: String,
-    is_connected: bool,
 }
 
 fn setup_camera_system(mut commands: Commands) {
@@ -33,17 +37,47 @@ impl Default for ConnectionSettings {
         Self {
             ip_address: "127.0.0.1".to_string(),
             ip_port: "12345".to_string(),
-            is_connected: false,
         }
     }
+}
+
+#[derive(Resource, Default)]
+enum NetworkState {
+    #[default]
+    Disconnected,
+    Connected {
+        connection: GameConnection,
+        peer: GamePeer,
+        stream: GameStream,
+    },
+}
+
+
+use bitflags::bitflags;
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub struct DirectionFlags: u8 {
+        const UP    = 0b0000_0001;
+        const DOWN  = 0b0000_0010;
+        const LEFT  = 0b0000_0100;
+        const RIGHT = 0b0000_1000;
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct PlayerInput {
+    pub flags: DirectionFlags,
 }
 
 fn ui_example_system(
     mut context: EguiContexts,
     mut settings: ResMut<ConnectionSettings>,
+    network_state: ResMut<NetworkState>,
 ) -> Result {
-    if settings.is_connected {
-        return Ok(());
+    match *network_state {
+        NetworkState::Connected { .. } => {return Ok(())}
+        _ => {}
     }
 
     egui::Window::new("Fenêtre de connexion")
@@ -63,7 +97,7 @@ fn ui_example_system(
 
                 if ui.button("Connect to server").clicked() {
                     println!("{:?}", settings.ip_address);
-                    connect_to_server(settings);
+                    connect_to_server(settings,network_state);
                 };
             }
         );
@@ -71,7 +105,8 @@ fn ui_example_system(
 }
 
 fn connect_to_server(
-    mut connection_settings: ResMut<ConnectionSettings>,
+    connection_settings: ResMut<ConnectionSettings>,
+    mut network_state: ResMut<NetworkState>,
 )  {
     let ip = connection_settings.ip_address.clone();
     let port = connection_settings.ip_port.clone();
@@ -120,7 +155,7 @@ fn connect_to_server(
 
                 match msg.data {
                     PacketData::ClientHandshake(_) => {
-                        connection_settings.is_connected = true;
+                        *network_state = NetworkState::Connected { connection,peer,stream };
                         break;
                     }
                     _ => println!("Unexpected packet type"),
@@ -136,7 +171,32 @@ fn connect_to_server(
         }
     }
 
-    if connection_settings.is_connected {
-        println!("Connected to server, close window");
+    let NetworkState::Connected { .. } = &mut *network_state else { return; };
+    println!("Connected to server, close window");
+}
+
+fn handle_input_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut player_input: ResMut<PlayerInput>
+) {
+    let mut inputs = DirectionFlags::empty();
+    if keyboard.pressed(KeyCode::ArrowUp) { inputs.insert(DirectionFlags::UP); }
+    if keyboard.pressed(KeyCode::ArrowDown) { inputs.insert(DirectionFlags::DOWN); }
+    if keyboard.pressed(KeyCode::ArrowLeft) { inputs.insert(DirectionFlags::LEFT); }
+    if keyboard.pressed(KeyCode::ArrowRight) { inputs.insert(DirectionFlags::RIGHT); }
+
+    player_input.flags = inputs;
+}
+
+fn send_inputs_to_network_system(
+    player_input: Res<PlayerInput>,
+    network_state: Res<NetworkState>,
+) {
+    let NetworkState::Connected{ connection, ref peer, ref stream } = *network_state else { return; };
+    let byte_to_send: u8 = player_input.flags.bits();
+
+    if byte_to_send != 0 {
+        println!("Envoi au serveur : {:08b}", byte_to_send);
     }
+
 }
