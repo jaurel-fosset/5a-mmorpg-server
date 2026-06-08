@@ -107,48 +107,39 @@ impl Packet for ShardDestructionPacket
     }
 }
 
-pub struct AuthorityGainPacket
+pub struct AuthoritySwitchPacket
 {
-    client: NetworkId
+    old_shard: Ipv6Addr,
+    new_shard: Ipv6Addr,
+    client: Ipv6Addr
 }
 
-impl Packet for AuthorityGainPacket
+impl AuthoritySwitchPacket
+{
+    pub fn new(old_shard: Ipv6Addr, new_shard: Ipv6Addr, client: Ipv6Addr) -> Self
+    {
+        Self { old_shard, new_shard, client }
+    }
+}
+
+impl Packet for AuthoritySwitchPacket
 {
     fn read(mut bytes: Bytes) -> Result<Self, SerializationError>
     where
         Self: Sized
     {
-        let client = NetworkId::deserialize(&mut bytes)?;
-        Ok(Self { client })
+        let old_shard = Ipv6Addr::deserialize(&mut bytes)?;
+        let new_shard = Ipv6Addr::deserialize(&mut bytes)?;
+        let client = Ipv6Addr::deserialize(&mut bytes)?;
+        
+        Ok(Self { old_shard, new_shard, client })
     }
 
     fn write(self) -> Result<Bytes, SerializationError>
     {
         let mut buffer = BytesMut::new();
-        self.client.serialize(&mut buffer)?;
-
-        Ok(buffer.freeze())
-    }
-}
-
-pub struct AuthorityLostPacket
-{
-    client: NetworkId
-}
-
-impl Packet for AuthorityLostPacket
-{
-    fn read(mut bytes: Bytes) -> Result<Self, SerializationError>
-    where
-        Self: Sized
-    {
-        let client = NetworkId::deserialize(&mut bytes)?;
-        Ok(Self { client })
-    }
-
-    fn write(self) -> Result<Bytes, SerializationError>
-    {
-        let mut buffer = BytesMut::new();
+        self.old_shard.serialize(&mut buffer)?;
+        self.new_shard.serialize(&mut buffer)?;
         self.client.serialize(&mut buffer)?;
 
         Ok(buffer.freeze())

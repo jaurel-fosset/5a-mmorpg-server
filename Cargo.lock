@@ -5371,6 +5371,10 @@ dependencies = [
 name = "spatial-server"
 version = "0.1.0"
 dependencies = [
+ "bytes",
+ "game_sockets",
+ "lazy_static",
+ "network_serialization",
  "thiserror 2.0.18",
 ]
 
