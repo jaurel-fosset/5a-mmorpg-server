@@ -4,6 +4,7 @@ use crate::SerializationError;
 pub mod game_server;
 pub mod broker;
 pub mod shard;
+pub mod topic;
 
 pub trait Packet
 {
