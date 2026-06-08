@@ -1,6 +1,6 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 use bytes::{Buf, BufMut, Bytes};
-use crate::{Deserializable, NetworkId, Serializable, SerializationError};
+use crate::{Deserializable, Serializable, SerializationError};
 
 impl Serializable for Ipv4Addr
 {
@@ -35,24 +35,5 @@ impl Deserializable for Ipv6Addr
     {
         let bits = u128::deserialize(stream)?;
         Ok(Self::from_bits(bits))
-    }
-}
-
-impl Serializable for NetworkId
-{
-    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
-    {
-        self.0.serialize(stream)
-    }
-}
-
-impl Deserializable for NetworkId
-{
-    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
-    where
-        Self: Sized
-    {
-        let id = u64::deserialize(bytes)?;
-        Ok(Self(id))
     }
 }

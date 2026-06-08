@@ -3,6 +3,7 @@ use crate::SerializationError;
 
 pub mod game_server;
 pub mod spatial_server;
+pub mod orchestrator;
 
 pub trait Packet
 {
