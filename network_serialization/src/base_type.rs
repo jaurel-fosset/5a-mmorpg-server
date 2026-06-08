@@ -167,7 +167,7 @@ impl<T: Deserializable, const N: usize> Deserializable for [T; N] {
 
 impl<T: Serializable> Serializable for Vec<T> {
     fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError> {
-        (self.len() as u64).serialize(stream)?;
+        (self.len() as u16).serialize(stream)?;
         for element in self {
             element.serialize(stream)?;
         }
@@ -177,7 +177,7 @@ impl<T: Serializable> Serializable for Vec<T> {
 
 impl<T: Deserializable> Deserializable for Vec<T> {
     fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError> {
-        let len = u64::deserialize(bytes)? as usize;
+        let len = u16::deserialize(bytes)? as usize;
         let mut vec = Vec::with_capacity(len);
         for _ in 0..len {
             vec.push(T::deserialize(bytes)?);
