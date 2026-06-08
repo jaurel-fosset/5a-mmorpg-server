@@ -1,8 +1,9 @@
 use crate::packets::Packet;
 use crate::{Deserializable, Serializable, SerializationError};
-use crate::packets::broker::{BroadcastPacket, ClientInputBrokerPacket, PublishPacket, RegisterPlayerPacket, SubscribePacket, UnsubscribePacket};
+use crate::packets::broker::{BroadcastPacket, ClientInputBrokerPacket, PublishPacket, ClientHelloPacket, SubscribePacket, UnsubscribePacket, ClientHandshakePacket};
 use crate::packets::shard::ClientInputShardPacket;
 
+#[derive(Debug)]
 pub struct PacketMessage {
     pub tag: u8,
     pub data: PacketData,
@@ -15,13 +16,15 @@ impl PacketMessage {
     }
 }
 
+#[derive(Debug)]
 pub enum PacketData {
     Subscribe(SubscribePacket),
     Unsubscribe(UnsubscribePacket),
     Publish(PublishPacket),
     Broadcast(BroadcastPacket),
     ClientInputBroker(ClientInputBrokerPacket),
-    RegisterPlayer(RegisterPlayerPacket),
+    ClientHello(ClientHelloPacket),
+    ClientHandshake(ClientHandshakePacket),
 
     ClientInputShard(ClientInputShardPacket),
 }
@@ -33,7 +36,9 @@ pub enum PacketTag {
     Publish = 0x02,
     Broadcast = 0x03,
     ClientInputBroker = 0x04,
-    RegisterPlayer = 0x05,
+    ClientHello = 0x05,
+    ClientHandshake = 0x10,
+
     ClientInputShard = 0x06,
 }
 
@@ -45,8 +50,9 @@ impl PacketData {
             PacketData::Publish(_) => PacketTag::Publish as u8,
             PacketData::Broadcast(_) => PacketTag::Broadcast as u8,
             PacketData::ClientInputBroker(_) => PacketTag::ClientInputBroker as u8,
-            PacketData::RegisterPlayer(_) => PacketTag::RegisterPlayer as u8,
+            PacketData::ClientHello(_) => PacketTag::ClientHello as u8,
             PacketData::ClientInputShard(_) => PacketTag::ClientInputShard as u8,
+            PacketData::ClientHandshake(_) => PacketTag::ClientHandshake as u8,
         }
     }
 }
@@ -60,7 +66,8 @@ impl TryFrom<u8> for PacketTag {
             0x02 => Ok(PacketTag::Publish),
             0x03 => Ok(PacketTag::Broadcast),
             0x04 => Ok(PacketTag::ClientInputBroker),
-            0x05 => Ok(PacketTag::RegisterPlayer),
+            0x05 => Ok(PacketTag::ClientHello),
+            0x10 => Ok(PacketTag::ClientHandshake),
             0x06 => Ok(PacketTag::ClientInputShard),
             _ => Err(SerializationError::InvalidDeserializationState),
         }
@@ -77,7 +84,8 @@ impl Packet for PacketMessage {
             PacketTag::Publish => PacketData::Publish(PublishPacket::deserialize(&mut bytes)?),
             PacketTag::Broadcast => PacketData::Broadcast(BroadcastPacket::deserialize(&mut bytes)?),
             PacketTag::ClientInputBroker => PacketData::ClientInputBroker(ClientInputBrokerPacket::deserialize(&mut bytes)?),
-            PacketTag::RegisterPlayer => PacketData::RegisterPlayer(RegisterPlayerPacket::deserialize(&mut bytes)?),
+            PacketTag::ClientHello => PacketData::ClientHello(ClientHelloPacket::deserialize(&mut bytes)?),
+            PacketTag::ClientHandshake => PacketData::ClientHandshake(ClientHandshakePacket::deserialize(&mut bytes)?),
             PacketTag::ClientInputShard => PacketData::ClientInputShard(ClientInputShardPacket::deserialize(&mut bytes)?),
         };
         Ok(Self { tag, data })
@@ -91,7 +99,8 @@ impl Packet for PacketMessage {
             PacketData::Publish(data) => data.serialize(&mut buffer)?,
             PacketData::Broadcast(data) => data.serialize(&mut buffer)?,
             PacketData::ClientInputBroker(data) => data.serialize(&mut buffer)?,
-            PacketData::RegisterPlayer(data) => data.serialize(&mut buffer)?,
+            PacketData::ClientHello(data) => data.serialize(&mut buffer)?,
+            PacketData::ClientHandshake(data) => data.serialize(&mut buffer)?,
             PacketData::ClientInputShard(data) => data.serialize(&mut buffer)?,
         };
         Ok(buffer.freeze())

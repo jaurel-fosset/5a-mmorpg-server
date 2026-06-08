@@ -94,13 +94,26 @@ impl Deserializable for ClientInputBrokerPacket {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct RegisterPlayerPacket{}
-impl Serializable for RegisterPlayerPacket {
+pub struct ClientHelloPacket {}
+impl Serializable for ClientHelloPacket {
     fn serialize(self, _bytes: &mut BytesMut) -> Result<(), SerializationError> {
         Ok(())
     }
 }
-impl Deserializable for RegisterPlayerPacket {
+impl Deserializable for ClientHelloPacket {
+    fn deserialize(_bytes: &mut Bytes) -> Result<Self, SerializationError> {
+        Ok(Self {})
+    }
+}
+
+#[derive(Debug)]
+pub struct ClientHandshakePacket {}
+impl Serializable for ClientHandshakePacket {
+    fn serialize(self, _bytes: &mut BytesMut) -> Result<(), SerializationError> {
+        Ok(())
+    }
+}
+impl Deserializable for ClientHandshakePacket {
     fn deserialize(_bytes: &mut Bytes) -> Result<Self, SerializationError> {
         Ok(Self {})
     }
