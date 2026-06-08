@@ -1,4 +1,5 @@
 ﻿use std::collections::HashSet;
+use std::net::Ipv6Addr;
 use crate::geometry::prelude as geo;
 use crate::network_object::shard::ShardId;
 
@@ -46,6 +47,11 @@ impl Entity
         }
     }
     
+    pub fn id(&self) -> EntityId
+    {
+        self.id
+    }
+    
     pub fn position(&self) -> &geo::Position
     {
         &self.position
@@ -71,5 +77,5 @@ impl Entity
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub struct EntityId(u64);
+pub struct EntityId(pub Ipv6Addr);
 

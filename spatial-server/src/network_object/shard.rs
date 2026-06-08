@@ -138,7 +138,7 @@ impl ShardManager
     pub fn on_receive_shard_creation(&mut self, shard_address: Ipv6Addr)
     {
         let shard_id = ShardId::new(shard_address);
-        
+
         match self.get_deleted_in_use_shard()
         {
             None =>
@@ -244,6 +244,8 @@ impl ShardId
     {
         ShardId(ip)
     }
+
+    pub fn ip(&self) -> Ipv6Addr { self.0 }
 }
 
 impl Display for ShardId

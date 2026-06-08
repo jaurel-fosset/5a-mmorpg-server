@@ -1,11 +1,17 @@
-﻿use crate::network_object::entity::Entity;
+﻿use network_serialization::packets::Packet;
+use crate::network_object::entity::Entity;
 use crate::network_object::shard::ShardId;
+use network_serialization::packets::spatial_server::*;
+use crate::network_connection::SOCKET;
 
 pub mod entity;
 pub mod shard;
 
 pub fn request_more_shards(amount: u64)
 {
+    let packet = AllocateShardsPacket::new(amount).write();
+    SOCKET.lock().expect("Lock poisoned");
+
     // TODO : request new shard on the network
 }
 
