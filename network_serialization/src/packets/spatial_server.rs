@@ -16,22 +16,22 @@ impl AllocateShardsPacket
     }
 }
 
-impl Packet for AllocateShardsPacket
+impl Serializable for AllocateShardsPacket
 {
-    fn read(mut bytes: Bytes) -> Result<Self, SerializationError>
+    fn serialize(self, stream: &mut BytesMut) -> Result<(), SerializationError>
+    {
+        self.shard_count.serialize(stream)
+    }
+}
+
+impl Deserializable for AllocateShardsPacket
+{
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
         Self: Sized
     {
-        let shard_count = u64::deserialize(&mut bytes)?;
+        let shard_count = u64::deserialize(bytes)?;
         Ok(Self { shard_count })
-    }
-
-    fn write(self) -> Result<Bytes, SerializationError>
-    {
-        let mut buffer = BytesMut::new();
-        self.shard_count.serialize(&mut buffer)?;
-
-        Ok(buffer.freeze())
     }
 }
 
@@ -40,22 +40,22 @@ pub struct DeAllocateShardsPacket
     shards: Vec<Ipv6Addr>
 }
 
-impl Packet for DeAllocateShardsPacket
+impl Serializable for DeAllocateShardsPacket
 {
-    fn read(mut bytes: Bytes) -> Result<Self, SerializationError>
+    fn serialize(self, stream: &mut BytesMut) -> Result<(), SerializationError>
+    {
+        self.shards.serialize(stream)
+    }
+}
+
+impl Deserializable for DeAllocateShardsPacket
+{
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
         Self: Sized
     {
-        let shards = Vec::deserialize(&mut bytes)?;
+        let shards = Vec::deserialize(bytes)?;
         Ok(Self { shards })
-    }
-
-    fn write(self) -> Result<Bytes, SerializationError>
-    {
-        let mut buffer = BytesMut::new();
-        self.shards.serialize(&mut buffer)?;
-
-        Ok(buffer.freeze())
     }
 }
 
@@ -64,22 +64,22 @@ pub struct ShardCreationPacket
     shards: Vec<Ipv6Addr>
 }
 
-impl Packet for ShardCreationPacket
+impl Serializable for ShardCreationPacket
 {
-    fn read(mut bytes: Bytes) -> Result<Self, SerializationError>
+    fn serialize(self, stream: &mut BytesMut) -> Result<(), SerializationError>
+    {
+        self.shards.serialize(stream)
+    }
+}
+
+impl Deserializable for ShardCreationPacket
+{
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
         Self: Sized
     {
-        let shards = Vec::deserialize(&mut bytes)?;
+        let shards = Vec::deserialize(bytes)?;
         Ok(Self { shards })
-    }
-
-    fn write(self) -> Result<Bytes, SerializationError>
-    {
-        let mut buffer = BytesMut::new();
-        self.shards.serialize(&mut buffer)?;
-
-        Ok(buffer.freeze())
     }
 }
 
@@ -88,22 +88,22 @@ pub struct ShardDestructionPacket
     shard: Ipv6Addr,
 }
 
-impl Packet for ShardDestructionPacket
+impl Serializable for ShardDestructionPacket
 {
-    fn read(mut bytes: Bytes) -> Result<Self, SerializationError>
+    fn serialize(self, stream: &mut BytesMut) -> Result<(), SerializationError>
+    {
+        self.shard.serialize(stream)
+    }
+}
+
+impl Deserializable for ShardDestructionPacket
+{
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
         Self: Sized
     {
-        let shard = Ipv6Addr::deserialize(&mut bytes)?;
+        let shard = Ipv6Addr::deserialize(bytes)?;
         Ok(Self { shard })
-    }
-
-    fn write(self) -> Result<Bytes, SerializationError>
-    {
-        let mut buffer = BytesMut::new();
-        self.shard.serialize(&mut buffer)?;
-
-        Ok(buffer.freeze())
     }
 }
 
@@ -122,26 +122,28 @@ impl AuthoritySwitchPacket
     }
 }
 
-impl Packet for AuthoritySwitchPacket
+impl Serializable for AuthoritySwitchPacket
 {
-    fn read(mut bytes: Bytes) -> Result<Self, SerializationError>
+    fn serialize(self, stream: &mut BytesMut) -> Result<(), SerializationError>
+    {
+        self.old_shard.serialize(stream)?;
+        self.new_shard.serialize(stream)?;
+        self.client.serialize(stream)?;
+
+        Ok(())
+    }
+}
+
+impl Deserializable for AuthoritySwitchPacket
+{
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
         Self: Sized
     {
-        let old_shard = Ipv6Addr::deserialize(&mut bytes)?;
-        let new_shard = Ipv6Addr::deserialize(&mut bytes)?;
-        let client = Ipv6Addr::deserialize(&mut bytes)?;
-        
+        let old_shard = Ipv6Addr::deserialize(bytes)?;
+        let new_shard = Ipv6Addr::deserialize(bytes)?;
+        let client = Ipv6Addr::deserialize(bytes)?;
+
         Ok(Self { old_shard, new_shard, client })
-    }
-
-    fn write(self) -> Result<Bytes, SerializationError>
-    {
-        let mut buffer = BytesMut::new();
-        self.old_shard.serialize(&mut buffer)?;
-        self.new_shard.serialize(&mut buffer)?;
-        self.client.serialize(&mut buffer)?;
-
-        Ok(buffer.freeze())
     }
 }

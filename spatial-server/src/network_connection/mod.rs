@@ -1,24 +1,26 @@
-﻿use std::net::Ipv6Addr;
-use std::rc::Rc;
+﻿pub mod packet;
+
+use std::net;
+use std::sync;
 use lazy_static::lazy_static;
 use game_sockets as gs;
 use network_serialization::packets::Packet;
-use network_serialization::packets::spatial_server::AllocateShardsPacket;
+use network_serialization::packets::spatial_server::*;
+use crate::network_connection::packet::OrchestratorPacket;
 use crate::network_object::entity::Entity;
 use crate::network_object::shard::ShardId;
 
-use network_serialization::packets::spatial_server::*;
 
 lazy_static!
 {
-    pub static ref SOCKET: Rc<NetworkGlobalState> = Rc::new(NetworkGlobalState::new());
+    pub static ref SOCKET: sync::Mutex<NetworkGlobalState> = sync::Mutex::new(NetworkGlobalState::new());
 }
 
 pub struct NetworkGlobalState
 {
     socket: gs::GamePeer,
-    initial: Option<OrchestratorConnection>,
-    // TODO : Add redis connection
+    orchestrator: Option<OrchestratorConnection>,
+    redis_ip: Option<net::Ipv6Addr>,
     broker: Option<BrokerSocket>,
 }
 
@@ -32,14 +34,46 @@ impl NetworkGlobalState
         Self
         {
             socket,
-            initial: None,
+            orchestrator: None,
+            redis_ip: None,
             broker: None,
+        }
+    }
+    
+    pub fn poll_once(&mut self)
+    {
+        let orchestrator = match &mut self.orchestrator
+        {
+            Some(orchestrator) => orchestrator,
+            None => return
+        };
+        
+        let packet = match orchestrator.poll_single()
+        {
+            None => return,
+            Some(packet) => packet,
+        };
+        
+        match packet
+        {
+            OrchestratorPacket::Hello(hello_packet) => 
+            {
+                self.redis_ip = Some(hello_packet.redis_dns);
+            }
+            OrchestratorPacket::ShardCreation(_) => 
+            {
+                // TODO : handle shard creation
+            }
+            OrchestratorPacket::ShardDestruction(_) => 
+            {
+                // TODO : handle shard deletion
+            }
         }
     }
 
     pub fn request_more_shards(&self, amount: u64)
     {
-        if let Some(orchestrator) = &self.initial
+        if let Some(orchestrator) = &self.orchestrator
         {
             let packet = AllocateShardsPacket::new(amount).write().unwrap();
             match orchestrator.send(packet)
@@ -85,7 +119,7 @@ impl OrchestratorConnection
         }
     }
     
-    pub fn poll_single(&mut self)
+    pub fn poll_single(&mut self) -> Option<OrchestratorPacket>
     {
         let event = self.socket.poll();
 
@@ -95,42 +129,50 @@ impl OrchestratorConnection
             Err(error) =>
                 {
                     println!("[Network] {}", error);
-                    return;
+                    return None;
                 }
         };
 
         let event = match event
         {
             Some(event) => event,
-            None => return,
+            None => return None,
         };
 
         match event
         {
             gs::GameNetworkEvent::Connected(connection) =>
             {
-                if self.connection.is_some() { return; }
+                if self.connection.is_some() { return None; }
 
                 self.connection = Some(connection);
                 let _ = self.socket.create_stream(connection, gs::GameStreamReliability::Reliable);
+                None
             }
-            gs::GameNetworkEvent::Disconnected(_) => {}
+            gs::GameNetworkEvent::Disconnected(_) => None,
             gs::GameNetworkEvent::Message { connection, stream, data } =>
             {
-                if self.connection != Some(connection) { return; }
-                if self.command_stream != Some(stream) { return; }
+                if self.connection != Some(connection) { return None; }
+                if self.command_stream != Some(stream) { return None; }
                 
-                // TODO read orchestrator hello, or shard creation destruction
+                let packet = match OrchestratorPacket::read(data)
+                { 
+                    Ok(packet) => packet,
+                    Err(error) => return None,
+                };
+                
+                Some(packet)
             }
-            gs::GameNetworkEvent::Error { .. } => {}
+            gs::GameNetworkEvent::Error { .. } => None,
             gs::GameNetworkEvent::StreamCreated(connection, stream) =>
-                {
-                    if self.connection != Some(connection) { return; }
-                    if self.command_stream.is_some() { return; }
+            {
+                if self.connection != Some(connection) { return None; }
+                if self.command_stream.is_some() { return None; }
 
-                    self.command_stream = Some(stream);
-                }
-            gs::GameNetworkEvent::StreamClosed(_, _) => {}
+                self.command_stream = Some(stream);
+                None
+            }
+            gs::GameNetworkEvent::StreamClosed(_, _) => None
         }
     }
 }
@@ -144,7 +186,7 @@ struct BrokerSocket
 
 impl BrokerSocket
 {
-    pub fn new(address: Ipv6Addr, port: u16) -> Option<BrokerSocket>
+    pub fn new(address: net::Ipv6Addr, port: u16) -> Option<BrokerSocket>
     {
         let backend = gs::protocols::QuicBackend::new();
         let socket = gs::GamePeer::new(backend);

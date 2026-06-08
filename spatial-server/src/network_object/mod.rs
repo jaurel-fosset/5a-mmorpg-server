@@ -9,9 +9,6 @@ pub mod shard;
 
 pub fn request_more_shards(amount: u64)
 {
-    let packet = AllocateShardsPacket::new(amount).write();
-    SOCKET.lock().expect("Lock poisoned");
-
     // TODO : request new shard on the network
 }
 
