@@ -1,10 +1,11 @@
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 use bevy::prelude::*;
 use bevy_egui::egui::{Align2, Context};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream, GameStreamReliability};
 use network_serialization::packet::{PacketData, PacketMessage};
-use network_serialization::packets::broker::ClientHelloPacket;
+use network_serialization::packets::broker::{ClientHelloPacket, ClientInputBrokerPacket};
 use network_serialization::packets::Packet;
 
 fn main() {
@@ -65,9 +66,19 @@ bitflags! {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct PlayerInput {
-    pub flags: DirectionFlags,
+    pub history_input: VecDeque<u8>,
+    pub network_timer: Timer,
+}
+
+impl Default for PlayerInput {
+    fn default() -> Self {
+        Self {
+            history_input: VecDeque::with_capacity(16),
+            network_timer: Timer::new(Duration::from_millis(16), TimerMode::Repeating)
+        }
+    }
 }
 
 fn ui_example_system(
@@ -176,27 +187,47 @@ fn connect_to_server(
 }
 
 fn handle_input_system(
+    time: Res<Time>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut player_input: ResMut<PlayerInput>
 ) {
+    player_input.network_timer.tick(time.delta());
+
+    if !player_input.network_timer.just_finished() {
+        return;
+    }
+
     let mut inputs = DirectionFlags::empty();
     if keyboard.pressed(KeyCode::ArrowUp) { inputs.insert(DirectionFlags::UP); }
     if keyboard.pressed(KeyCode::ArrowDown) { inputs.insert(DirectionFlags::DOWN); }
     if keyboard.pressed(KeyCode::ArrowLeft) { inputs.insert(DirectionFlags::LEFT); }
     if keyboard.pressed(KeyCode::ArrowRight) { inputs.insert(DirectionFlags::RIGHT); }
 
-    player_input.flags = inputs;
+    player_input.history_input.push_back(inputs.bits());
+    if player_input.history_input.len() > 16 {
+        player_input.history_input.pop_front();
+    }
 }
 
 fn send_inputs_to_network_system(
     player_input: Res<PlayerInput>,
     network_state: Res<NetworkState>,
 ) {
-    let NetworkState::Connected{ connection, ref peer, ref stream } = *network_state else { return; };
-    let byte_to_send: u8 = player_input.flags.bits();
-
-    if byte_to_send != 0 {
-        println!("Envoi au serveur : {:08b}", byte_to_send);
+    if !player_input.network_timer.just_finished() {
+        return;
     }
 
+    let NetworkState::Connected{ connection, ref peer, ref stream } = *network_state else { return; };
+    let mut inputs: [u8; 16] = [0; 16];
+    for (i, &input_byte) in player_input.history_input.iter().enumerate() {
+        inputs[i] = input_byte;
+    }
+
+    let packet = PacketMessage::new(
+        PacketData::ClientInputBroker(
+            ClientInputBrokerPacket{ input:inputs}
+        ));
+
+    println!("Envoi au serveur : {:?}", packet);
+    peer.send(&connection, &stream, packet.write().unwrap()).unwrap();
 }

@@ -181,11 +181,8 @@ fn publish_shard_state(
                 );
                 let bytes = packet.write().unwrap();
 
-    for client_id in clients {
-        let player_data = state.client_to_connection.get(&client_id);
-        match player_data {
-            Some(data) => state.game_peer.send(&data.connection,&data.stream,bytes.clone()).unwrap(),
-            None => (),
+                state.game_peer.send(&connection.connection, &connection.stream, bytes).unwrap();
+            }
         }
     }
 }
@@ -195,16 +192,48 @@ fn handle_player_input(
     connection_data: ConnectionData,
     input: [u8; 16]
 ){
+    println!("Player input: {:?}", input);
+
     let Some(client_id) = state.connection_to_client.get(&connection_data) else {return;};
-    let Some(shard_topic) = state.client_to_shard.get(&client_id) else {return;};
-    let Some(shard_connection) = state.shard_to_connection.get(shard_topic) else {return;};
+
+    let tree_input = TopicTree {
+        name: "input".to_string(),
+        item: TopicTreeType::Leaf(TopicLeaf::new(Vec::from(input)))
+    };
+
+    let mut tree_player = TopicTree::new_empty(client_id.to_string());
+    tree_player.add_tree(tree_input);
+
+    /* Code pour tester le hash et récupérer la donnée
+    let hash = tree_player.clone().flatten();
+    let key : String = client_id.to_string()+"/input";
+
+    println!("tree: {:?}", hash.keys());
+    let data = tree_player.get(&*key);
+    println!("data: {:?}", data);
+
+    println!("Player {:?} input: {:?}", client_id, input);*/
+
+    let key_name : String = client_id.to_string()+"/input";
+    let key_vec = Vec::<u8>::from(key_name.as_bytes());
 
     let packet = PacketMessage::new(
-        PacketData::ClientInputShard(
-            ClientInputShardPacket { client_id: *client_id, input, }
+        PacketData::Publish(
+            PublishPacket{
+                topic: tree_player,
+            }
         )
     );
-    let bytes = packet.write().unwrap();
+    let bytes: Bytes = packet.write().unwrap();
 
-    state.game_peer.send(&shard_connection.connection, &shard_connection.stream, bytes).unwrap();
+    for (key,value) in state.client_to_subscribed_keys.iter() {
+        if value.contains(&key_vec) {
+            let Some(connection) = state.client_to_connection.get(key) else {break;};
+            state.game_peer.send(
+                &connection.connection,
+                &connection_data.stream,
+                bytes.clone()
+            ).unwrap();
+        }
+    }
 }
