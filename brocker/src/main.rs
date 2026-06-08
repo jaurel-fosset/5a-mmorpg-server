@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::time::Duration;
+use bytes::{Bytes};
 use game_sockets::{GameConnection, GamePeer, GameStream};
 use network_serialization::packet::{PacketData, PacketMessage};
-use network_serialization::packets::broker::{BroadcastPacket, ClientInputBrokerPacket};
+use network_serialization::packets::broker::{BroadcastPacket, ClientHandshakePacket, ClientHelloPacket, PublishPacket};
 use network_serialization::packets::Packet;
-use network_serialization::packets::shard::ClientInputShardPacket;
+use network_serialization::packets::topic::{TopicLeaf, TopicNode, TopicTree, TopicTreeType};
 
 #[derive(Clone, Hash, Eq, PartialEq, Default)]
 struct ConnectionData {
@@ -14,12 +15,11 @@ struct ConnectionData {
 
 struct BrokerState{
     game_peer : GamePeer,
-    subscription: HashMap<[u8;32],Vec<u32>>,
     spatial_server: Option<ConnectionData>,
-    shard_to_connection: HashMap<[u8;32],ConnectionData>,
     client_to_connection: HashMap<u32, ConnectionData>,
     connection_to_client: HashMap<ConnectionData, u32>,
-    client_to_shard: HashMap<u32, [u8;32]>,
+    client_to_subscribed_keys: HashMap<u32, Vec<Vec<u8>>>,
+    shard_to_connection: HashMap<u32,ConnectionData>,
     next_client_id: u32,
 }
 
@@ -27,12 +27,11 @@ impl BrokerState {
     fn new(game_peer: GamePeer) -> BrokerState {
         BrokerState{
             game_peer,
-            subscription: Default::default(),
             spatial_server: None,
-            shard_to_connection: Default::default(),
             client_to_connection: Default::default(),
             connection_to_client: Default::default(),
-            client_to_shard: Default::default(),
+            client_to_subscribed_keys: Default::default(),
+            shard_to_connection: Default::default(),
             next_client_id: 0}
     }
 }
@@ -56,9 +55,9 @@ async fn main() {
                 match msg.data {
                     PacketData::Subscribe(packet) => subscribe_client(&mut broker, connection_data, packet.client_id, packet.topic),
                     PacketData::Unsubscribe(packet) => unsubscribe_client(&mut broker, connection_data, packet.client_id, packet.topic),
-                    PacketData::Publish(packet) => publish_shard_state(&mut broker, connection_data, packet.topic, packet.payload),
+                    PacketData::Publish(packet) => publish_shard_state(&mut broker, connection_data, packet.topic),
                     PacketData::ClientInputBroker(packet) => handle_player_input(&mut broker, connection_data, packet.input),
-                    PacketData::RegisterPlayer(packet) => register_player(&mut broker, connection_data),
+                    PacketData::ClientHello(packet) => register_client(&mut broker, connection_data),
                     _ => println!("Unexpected message received")
                 }
             }
@@ -72,13 +71,18 @@ async fn main() {
     }
 }
 
-fn register_player(
+fn register_client(
     state: &mut BrokerState,
     connection_data: ConnectionData,
 ){
+    println!("Register Client");
+
     let client_id = state.next_client_id;
     state.client_to_connection.insert(client_id, connection_data.clone());
-    state.connection_to_client.insert(connection_data, client_id);
+    state.connection_to_client.insert(connection_data.clone(), client_id);
+    
+    let packet = PacketMessage::new(PacketData::ClientHandshake(ClientHandshakePacket {}));
+    state.game_peer.send(&connection_data.connection, &connection_data.stream, packet.write().unwrap()).unwrap();
 
     // todo : send data to shard
     state.next_client_id += 1;
@@ -89,6 +93,7 @@ fn register_spatial_server(
     connection_data: ConnectionData,
 ){
     if state.spatial_server == None {
+        println!("Register spatial server");
         state.spatial_server = Some(connection_data);
     }
 }
@@ -96,10 +101,20 @@ fn register_spatial_server(
 fn register_shard(
     state: &mut BrokerState,
     connection_data: ConnectionData,
-    topic: [u8; 32],
 ){
-    if let None = state.shard_to_connection.get(&topic) {
-        state.shard_to_connection.insert(topic, connection_data);
+    match state.connection_to_client.get(&connection_data) {
+        None => {
+            println!("Register shard");
+            // Dans ce cas, il le shard ne s'est jamais connecté au broker
+            // On doit donc créé un nouveau client
+            let new_client_id = state.next_client_id;
+            state.client_to_connection.insert(new_client_id, connection_data.clone());
+            state.shard_to_connection.insert(new_client_id, connection_data);
+            state.next_client_id += 1;
+        }
+        Some(shard_id) => {
+            state.shard_to_connection.insert(*shard_id, connection_data.clone());
+        }
     }
 }
 
@@ -107,47 +122,64 @@ fn subscribe_client(
     state: &mut BrokerState,
     connection_data: ConnectionData,
     client_id: u32,
-    topic: [u8;32]
+    topic: TopicTree,
 ){
     register_spatial_server(state, connection_data);
 
-    let clients = state.subscription.entry(topic).or_insert_with(Vec::new);
-    clients.push(client_id);
-
-    state.client_to_shard.insert(client_id, topic);
+    let keys = topic.keys();
+    let subscribed_key  = state.client_to_subscribed_keys.entry(client_id).or_insert(Vec::new());
+    for key in keys {
+        subscribed_key.push(key);
+        println!("Subscribed client {} to {}", client_id ,subscribed_key.len());
+    }
 }
 
 fn unsubscribe_client(
     state: &mut BrokerState,
     connection_data: ConnectionData,
     client_id: u32,
-    topic: [u8;32]
+    topic: TopicTree
 ){
     register_spatial_server(state, connection_data);
 
-    let clients = state.subscription.entry(topic).or_insert_with(Vec::new);
-    clients.retain(|&x| x != client_id);
-
-    if state.client_to_shard.get(&client_id) == Some(&topic) {
-        state.client_to_shard.remove(&client_id);
+    let keys = topic.keys();
+    let subscribed_key = state.client_to_subscribed_keys.entry(client_id).or_insert(Vec::new());
+    for key in keys {
+        subscribed_key.retain(|x| *x != key);
     }
 }
 
 fn publish_shard_state(
     state: &mut BrokerState,
     connection_data: ConnectionData,
-    topic: [u8;32],
-    payload: Vec<u8>,
+    topic: TopicTree,
 ){
-    register_shard(state, connection_data, topic);
+    register_shard(state, connection_data);
 
-    let clients = state.subscription.entry(topic).or_insert_with(Vec::new);
-    let packet = PacketMessage::new(
-        PacketData::Broadcast(
-            BroadcastPacket{payload}
-        )
-    );
-    let bytes = packet.write().unwrap();
+    let topic_name = topic.name.clone();
+
+    for (client, keys) in &state.client_to_subscribed_keys {
+        let mut tree_result = TopicTree::new_empty(topic_name.clone());
+        for key in keys {
+            let Ok(key_string) = String::from_utf8(key.clone()) else {continue;};
+            let Some(sub_tree) = topic.get_sub_tree(&*key_string) else {continue};
+            tree_result.merge(&sub_tree);
+        }
+
+
+        match tree_result.item.clone() {
+            TopicTreeType::Leaf(_) => {}
+            TopicTreeType::Node(topic) => {
+                if topic.data.iter().count() == 0 { continue; }
+                // si on est ici, c'est qu'on a des données à envoyer
+
+                let Some(connection) = state.client_to_connection.get(client) else { continue; };
+                let packet = PacketMessage::new(
+                    PacketData::Broadcast(
+                        BroadcastPacket{topic:tree_result}
+                    )
+                );
+                let bytes = packet.write().unwrap();
 
     for client_id in clients {
         let player_data = state.client_to_connection.get(&client_id);
