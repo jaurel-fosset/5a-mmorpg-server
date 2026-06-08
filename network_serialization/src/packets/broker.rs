@@ -1,10 +1,11 @@
 use bytes::{Bytes, BytesMut};
 use crate::{Deserializable, Serializable, SerializationError};
+use crate::packets::topic::TopicTree;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SubscribePacket{
     pub client_id: u32,
-    pub topic: [u8; 32],
+    pub topic: TopicTree,
 }
 impl Serializable for SubscribePacket {
     fn serialize(self, bytes: &mut BytesMut) -> Result<(), SerializationError> {
@@ -16,7 +17,7 @@ impl Serializable for SubscribePacket {
 impl Deserializable for SubscribePacket {
     fn deserialize(mut bytes: &mut Bytes) -> Result<Self, SerializationError> {
         let client_id = u32::deserialize(&mut bytes)?;
-        let topic = <[u8; 32]>::deserialize(&mut bytes)?;
+        let topic = TopicTree::deserialize(&mut bytes)?;
         Ok(Self { client_id, topic })
     }
 }
@@ -24,7 +25,7 @@ impl Deserializable for SubscribePacket {
 #[derive(Debug, PartialEq, Clone)]
 pub struct UnsubscribePacket{
     pub client_id: u32,
-    pub topic: [u8; 32],
+    pub topic: TopicTree,
 }
 impl Serializable for UnsubscribePacket {
     fn serialize(self, bytes: &mut BytesMut) -> Result<(), SerializationError> {
@@ -36,45 +37,42 @@ impl Serializable for UnsubscribePacket {
 impl Deserializable for UnsubscribePacket {
     fn deserialize(mut bytes: &mut Bytes) -> Result<Self, SerializationError> {
         let client_id = u32::deserialize(&mut bytes)?;
-        let topic = <[u8; 32]>::deserialize(&mut bytes)?;
+        let topic = TopicTree::deserialize(&mut bytes)?;
         Ok(Self { client_id, topic })
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PublishPacket{
-    pub topic: [u8; 32],
-    pub payload: Vec<u8>,
+    pub topic: TopicTree,
 }
 impl Serializable for PublishPacket {
     fn serialize(self, bytes: &mut BytesMut) -> Result<(), SerializationError> {
         self.topic.serialize(bytes)?;
-        self.payload.serialize(bytes)?;
         Ok(())
     }
 }
 impl Deserializable for PublishPacket {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError> {
-        let topic = <[u8; 32]>::deserialize(bytes)?;
-        let payload = Vec::<u8>::deserialize(bytes)?;
-        Ok(Self { topic, payload })
+        let topic = TopicTree::deserialize(bytes)?;
+        Ok(Self { topic })
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BroadcastPacket{
-    pub payload: Vec<u8>,
+    pub topic: TopicTree,
 }
 impl Serializable for BroadcastPacket {
     fn serialize(self, bytes: &mut BytesMut) -> Result<(), SerializationError> {
-        self.payload.serialize(bytes)?;
+        self.topic.serialize(bytes)?;
         Ok(())
     }
 }
 impl Deserializable for BroadcastPacket {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError> {
-        let payload = Vec::<u8>::deserialize(bytes)?;
-        Ok(Self { payload })
+        let topic = TopicTree::deserialize(bytes)?;
+        Ok(Self { topic })
     }
 }
 

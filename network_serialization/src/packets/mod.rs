@@ -6,6 +6,7 @@ pub mod broker;
 pub mod shard;
 pub mod spatial_server;
 pub mod orchestrator;
+pub mod topic;
 
 pub trait Packet
 {
