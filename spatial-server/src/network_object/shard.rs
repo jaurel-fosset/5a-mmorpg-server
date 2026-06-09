@@ -1,0 +1,267 @@
+﻿use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+use std::net::Ipv6Addr;
+use std::time;
+use crate::geometry::prelude as geo;
+use thiserror;
+use crate::network_object::request_more_shards;
+
+pub struct ShardManager
+{
+    shards: HashMap<ShardId, Shard>,
+    deleted_in_use: HashMap<ShardId, (time::Instant, Shard)>,
+    replaced_shards: HashMap<ShardId, ShardId>,
+    free_shards: HashMap<ShardId, time::Instant>,
+}
+
+const MAX_IDLE_TIME: time::Duration = time::Duration::from_secs(10);
+
+impl ShardManager
+{
+    pub fn new() -> Self
+    {
+        ShardManager
+        {
+            shards: HashMap::new(),
+            deleted_in_use: HashMap::new(),
+            replaced_shards: HashMap::new(),
+            free_shards: HashMap::new(),
+        }
+    }
+
+    pub fn get_entity_count(&self, id: ShardId) -> Result<usize, ShardManagerError>
+    {
+        self.get_shard_resolved(id)
+            .map(|shard| shard.entities_count)
+    }
+
+    pub fn in_subscribe_range(&mut self, id: ShardId, position: geo::Position) -> Result<bool, ShardManagerError>
+    {
+        self.get_shard_resolved(id)
+            .map(|shard| shard.in_subscribe_range(position))
+    }
+
+    fn get_shard_resolved(&self, id: ShardId) -> Result<&Shard, ShardManagerError>
+    {
+        if let Some(shard) = self.shards.get(&id)
+        {
+            return Ok(shard);
+        }
+
+        match self.resolve_id(id)
+        {
+            Some(new_id) =>
+                {
+                    if self.shards.contains_key(&new_id)
+                    {
+                        Err(ShardManagerError::ShardReplaced(new_id))
+                    }
+                    else { Err(ShardManagerError::ShardNotFound) }
+                }
+            None => Err(ShardManagerError::ShardNotFound),
+        }
+    }
+
+    pub fn update_shard(&mut self, id: ShardId, authority_bounds: geo::Rect, load: usize) -> Option<()>
+    {
+        let shard = self.shards.get_mut(&id).unwrap();
+        shard.entities_count = load;
+        shard.authority_bound = authority_bounds;
+        shard.subscribe_bound = authority_bounds.subscribe_rect();
+
+        Some(())
+    }
+
+    pub fn should_resolve(&self, id: ShardId) -> bool
+    {
+        self.shards.contains_key(&id)
+    }
+
+    pub fn resolve_id(&self, id: ShardId) -> Option<ShardId>
+    {
+        let mut resolved_id = self.replaced_shards.get(&id)?;
+        while let Some(new_id) = self.replaced_shards.get(resolved_id)
+        {
+            resolved_id = new_id;
+        }
+
+        Some(*resolved_id)
+    }
+
+    pub fn new_shard(&mut self, authority_bounds: geo::Rect, subscribe_bounds: geo::Rect) -> Option<ShardId>
+    {
+        let shard_id = self.get_free_shard()?;
+
+        self.free_shards.remove(&shard_id);
+        self.shards.insert(shard_id, Shard::new(authority_bounds, subscribe_bounds));
+
+        Some(shard_id)
+    }
+
+    pub fn release_shard(&mut self, shard_id: ShardId)
+    {
+        self.shards.remove(&shard_id);
+        self.free_shards.insert(shard_id, time::Instant::now());
+    }
+
+    pub fn new_shard_with_capacity(&mut self, authority_bounds: geo::Rect, subscribe_bounds: geo::Rect, capacity: usize) -> Option<ShardId>
+    {
+        let shard_id = self.get_free_shard()?;
+
+        self.free_shards.remove(&shard_id);
+
+        let shard = Shard
+        {
+            entities_count: capacity,
+            authority_bound: authority_bounds,
+            subscribe_bound: subscribe_bounds,
+        };
+        self.shards.insert(shard_id, shard);
+
+        Some(shard_id)
+    }
+
+    pub fn clean_up_replaced(&mut self, shard_id: ShardId)
+    {
+        self.replaced_shards.remove(&shard_id);
+    }
+
+    pub fn clean_up_free_shards(&mut self)
+    {
+        self.free_shards
+            .retain(|_, instant|
+            {
+                *instant - time::Instant::now() < MAX_IDLE_TIME
+            });
+    }
+
+    pub fn on_receive_shard_creation(&mut self, shard_address: Ipv6Addr)
+    {
+        let shard_id = ShardId::new(shard_address);
+
+        match self.get_deleted_in_use_shard()
+        {
+            None =>
+            {
+                self.free_shards.insert(shard_id, time::Instant::now());
+            }
+            Some(deleted_shard_id) =>
+            {
+                let (_, deleted_shard) = &self.deleted_in_use[&deleted_shard_id];
+
+                self.shards.insert(shard_id, Shard::new(deleted_shard.authority_bound, deleted_shard.subscribe_bound));
+                self.replaced_shards.insert(deleted_shard_id, shard_id);
+                self.deleted_in_use.remove(&deleted_shard_id);
+            }
+        }
+    }
+
+    pub fn on_receive_shard_deletion(&mut self, deleted_shard: ShardId)
+    {
+        match self.free_shards.remove(&deleted_shard)
+        {
+            Some(_) => return,
+            None => (),
+        }
+
+        if     self.deleted_in_use.contains_key(&deleted_shard)
+            || self.replaced_shards.contains_key(&deleted_shard)
+        {
+            eprintln!("Error: Double deletion on network, ignoring");
+            return;
+        }
+
+        let shard = match self.shards.remove(&deleted_shard)
+        {
+            Some(shard) => shard,
+            None =>
+            {
+                eprintln!("Error : deleted shard was not in any of our cache");
+                return;
+            },
+        };
+
+        eprintln!("Catastrophic error : shard in use was deleted");
+        match self.new_shard(shard.authority_bound, shard.subscribe_bound)
+        {
+            Some(new_shard) =>
+            {
+                println!("We were able to recover using another shard");
+                self.replaced_shards.insert(deleted_shard, new_shard);
+            }
+            None =>
+            {
+                println!("Requesting another shard created");
+                self.deleted_in_use.insert(deleted_shard, (time::Instant::now(), shard));
+                request_more_shards(1);
+                return;
+            }
+        };
+    }
+
+    fn get_free_shard(&self) -> Option<ShardId>
+    {
+        self.shards.keys().copied().next()
+    }
+
+    fn get_deleted_in_use_shard(&self) -> Option<ShardId>
+    {
+        self.deleted_in_use.keys().copied().next()
+    }
+}
+
+pub struct Shard
+{
+    pub entities_count: usize,
+    pub authority_bound: geo::Rect,
+    pub subscribe_bound: geo::Rect,
+}
+
+impl Shard
+{
+    fn new(authority_bound: geo::Rect, subscribe_bound: geo::Rect) -> Self
+    {
+        Self
+        {
+            entities_count: 0,
+            authority_bound,
+            subscribe_bound,
+        }
+    }
+
+    pub fn in_subscribe_range(&self, position: geo::Position) -> bool
+    {
+        position.overlap_rect(self.subscribe_bound)
+    }
+}
+
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub struct ShardId(Ipv6Addr);
+
+impl ShardId
+{
+    fn new(ip: Ipv6Addr) -> Self
+    {
+        ShardId(ip)
+    }
+
+    pub fn ip(&self) -> Ipv6Addr { self.0 }
+}
+
+impl Display for ShardId
+{
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result
+    {
+        write!(formatter, "ShardId({})", self.0)
+    }
+}
+
+
+#[derive(thiserror::Error, Debug)]
+pub enum ShardManagerError
+{
+    #[error("Shard was not found")]
+    ShardNotFound,
+    #[error("Shard was destroyed and replaced by {0}")]
+    ShardReplaced(ShardId),
+}

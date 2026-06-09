@@ -1,4 +1,4 @@
-﻿use bytes::{Buf, BufMut};
+﻿use bytes::{Buf, BufMut, BytesMut};
 use crate::{Deserializable, Serializable, SerializationError};
 
 impl Serializable for f32
