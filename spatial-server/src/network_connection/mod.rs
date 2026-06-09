@@ -5,25 +5,25 @@ use crate::network_object::entity::Entity;
 use crate::network_object::shard::ShardId;
 use game_sockets as gs;
 use lazy_static::lazy_static;
-use network_serialization::packets::Packet;
 use network_serialization::packets::spatial_server::*;
+use network_serialization::packets::Packet;
 use std::net;
 use std::sync;
 
 lazy_static! {
-    pub static ref SOCKET: sync::Mutex<NetworkGlobalState> =
+    pub static ref NETWORK: sync::Mutex<NetworkGlobalState> =
         sync::Mutex::new(NetworkGlobalState::new());
 }
 
 pub enum NetworkEvent {
-    ShardCreation(Ipv6Addr),
-    ShardDestruction(Ipv6Addr),
-    PositionUpdate(Vec<(f32, f32)>),
+    ShardCreation(net::Ipv6Addr),
+    ShardDestruction(net::Ipv6Addr),
+    PositionUpdate(Vec<(u32, f32, f32)>),
 }
 
 pub struct NetworkGlobalState {
     socket: gs::GamePeer,
-    orchestrator: Option<OrchestratorConnection>,
+    orchestrator: OrchestratorConnection,
     redis_ip: Option<net::Ipv6Addr>,
     broker: Option<BrokerSocket>,
 }
@@ -35,20 +35,15 @@ impl NetworkGlobalState {
 
         Self {
             socket,
-            orchestrator: None,
+            orchestrator: OrchestratorConnection::new(),
             redis_ip: None,
             broker: None,
         }
     }
 
-    pub fn poll_once(&mut self) -> NetworkEvent {
-        let orchestrator = match &mut self.orchestrator {
-            Some(orchestrator) => orchestrator,
-            None => return,
-        };
-
-        let packet = match orchestrator.poll_single() {
-            None => return,
+    pub fn poll_once(&mut self) -> Option<NetworkEvent> {
+        let packet = match self.orchestrator.poll_single() {
+            None => return None,
             Some(packet) => packet,
         };
 
@@ -65,13 +60,13 @@ impl NetworkGlobalState {
         }
     }
 
-    pub fn request_more_shards(&self, amount: u64) {
-        if let Some(orchestrator) = &self.orchestrator {
-            let packet = AllocateShardsPacket::new(amount).write().unwrap();
-            match orchestrator.send(packet) {
-                Ok(_) => (),
-                Err(_) => (),
-            }
+    pub fn request_more_shards(&self, amount: u64)
+    {
+        let packet = AllocateShardsPacket::new(amount).write().unwrap();
+        match self.orchestrator.send(packet)
+        {
+            Ok(_) => (),
+            Err(_) => (),
         }
     }
 
@@ -89,6 +84,8 @@ impl NetworkGlobalState {
     }
 }
 
+const ORCHESTRATOR_PORT: u16 = 4000;
+
 struct OrchestratorConnection {
     socket: gs::GamePeer,
     connection: Option<gs::GameConnection>,
@@ -96,6 +93,21 @@ struct OrchestratorConnection {
 }
 
 impl OrchestratorConnection {
+    pub fn new() -> Self
+    {
+        let backend = gs::protocols::QuicBackend::new();
+        let socket = gs::GamePeer::new(backend);
+        socket.connect("0.0.0.0", ORCHESTRATOR_PORT)
+            .unwrap();
+
+        Self
+        {
+            socket,
+            connection: None,
+            command_stream: None,
+        }
+    }
+
     pub fn send(&self, bytes: bytes::Bytes) -> Result<(), NetworkError> {
         if let Some(connection) = &self.connection
             && let Some(command_stream) = &self.command_stream
@@ -151,7 +163,7 @@ impl OrchestratorConnection {
 
                 let packet = match OrchestratorPacket::read(data) {
                     Ok(packet) => packet,
-                    Err(error) => return None,
+                    Err(_error) => return None,
                 };
 
                 Some(packet)

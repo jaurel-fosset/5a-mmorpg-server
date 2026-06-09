@@ -1,7 +1,6 @@
-﻿use std::net::Ipv6Addr;
+﻿use crate::*;
 use bytes::{Bytes, BytesMut};
-use crate::*;
-use crate::packets::Packet;
+use std::net::Ipv6Addr;
 
 pub struct AllocateShardsPacket
 {
@@ -28,7 +27,7 @@ impl Deserializable for AllocateShardsPacket
 {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
-        Self: Sized
+        Self: Sized,
     {
         let shard_count = u64::deserialize(bytes)?;
         Ok(Self { shard_count })
@@ -37,7 +36,7 @@ impl Deserializable for AllocateShardsPacket
 
 pub struct DeAllocateShardsPacket
 {
-    shards: Vec<Ipv6Addr>
+    shards: Vec<Ipv6Addr>,
 }
 
 impl Serializable for DeAllocateShardsPacket
@@ -52,7 +51,7 @@ impl Deserializable for DeAllocateShardsPacket
 {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
-        Self: Sized
+        Self: Sized,
     {
         let shards = Vec::deserialize(bytes)?;
         Ok(Self { shards })
@@ -61,7 +60,7 @@ impl Deserializable for DeAllocateShardsPacket
 
 pub struct ShardCreationPacket
 {
-    shards: Vec<Ipv6Addr>
+    shards: Vec<Ipv6Addr>,
 }
 
 impl Serializable for ShardCreationPacket
@@ -76,7 +75,7 @@ impl Deserializable for ShardCreationPacket
 {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
-        Self: Sized
+        Self: Sized,
     {
         let shards = Vec::deserialize(bytes)?;
         Ok(Self { shards })
@@ -100,7 +99,7 @@ impl Deserializable for ShardDestructionPacket
 {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
-        Self: Sized
+        Self: Sized,
     {
         let shard = Ipv6Addr::deserialize(bytes)?;
         Ok(Self { shard })
@@ -111,12 +110,12 @@ pub struct AuthoritySwitchPacket
 {
     old_shard: Ipv6Addr,
     new_shard: Ipv6Addr,
-    client: Ipv6Addr
+    client: u32,
 }
 
 impl AuthoritySwitchPacket
 {
-    pub fn new(old_shard: Ipv6Addr, new_shard: Ipv6Addr, client: Ipv6Addr) -> Self
+    pub fn new(old_shard: Ipv6Addr, new_shard: Ipv6Addr, client: u32) -> Self
     {
         Self { old_shard, new_shard, client }
     }
@@ -138,11 +137,11 @@ impl Deserializable for AuthoritySwitchPacket
 {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
-        Self: Sized
+        Self: Sized,
     {
         let old_shard = Ipv6Addr::deserialize(bytes)?;
         let new_shard = Ipv6Addr::deserialize(bytes)?;
-        let client = Ipv6Addr::deserialize(bytes)?;
+        let client = u32::deserialize(bytes)?;
 
         Ok(Self { old_shard, new_shard, client })
     }
