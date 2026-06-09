@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::time::Duration;
 use bytes::{Bytes};
-use game_sockets::{GameConnection, GamePeer, GameStream};
+use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream};
 use network_serialization::packet::{PacketData, PacketMessage};
-use network_serialization::packets::broker::{BroadcastPacket, ClientHandshakePacket, ClientHelloPacket, PublishPacket};
+use network_serialization::packets::broker::{BroadcastPacket, ClientHandshakePacket, PublishPacket};
 use network_serialization::packets::Packet;
 use network_serialization::packets::topic::{TopicLeaf, TopicNode, TopicTree, TopicTreeType};
 
@@ -18,6 +18,7 @@ struct BrokerState{
     spatial_server: Option<ConnectionData>,
     client_to_connection: HashMap<u32, ConnectionData>,
     connection_to_client: HashMap<ConnectionData, u32>,
+    game_connection_to_client: HashMap<GameConnection, u32>,
     client_to_subscribed_keys: HashMap<u32, Vec<Vec<u8>>>,
     shard_to_connection: HashMap<u32,ConnectionData>,
     next_client_id: u32,
@@ -30,6 +31,7 @@ impl BrokerState {
             spatial_server: None,
             client_to_connection: Default::default(),
             connection_to_client: Default::default(),
+            game_connection_to_client: Default::default(),
             client_to_subscribed_keys: Default::default(),
             shard_to_connection: Default::default(),
             next_client_id: 0}
@@ -64,11 +66,34 @@ async fn main() {
             Ok(Some(game_sockets::GameNetworkEvent::Connected(conn))) => {
                 println!("GameServer connected: {:?}", conn);
             }
+            Ok(Some(game_sockets::GameNetworkEvent::Disconnected(conn))) => {
+                cleanup_disconnected_client(&mut broker, conn);
+            }
+            Ok(Some(GameNetworkEvent::Error { connection, inner })) => {
+                match inner {
+                    game_sockets::GameSocketError::SendFailed { inner_msg } => {
+                        println!("Send failed for {:?}: {}", connection, inner_msg);
+                        cleanup_disconnected_client(&mut broker, connection);
+                    }
+                    e => println!("Other error: {:?}", e),
+                }
+            }
             Ok(Some(e)) => println!("Event: {:?}", e),
             Ok(None) => tokio::time::sleep(Duration::from_millis(10)).await,
             Err(e) => println!("Error: {}", e),
         }
     }
+}
+
+fn register_connection(
+    state: &mut BrokerState,
+    connection_data: ConnectionData
+) {
+    let new_client_id = state.next_client_id;
+    state.client_to_connection.insert(new_client_id, connection_data.clone());
+    state.connection_to_client.insert(connection_data.clone(), new_client_id);
+    state.game_connection_to_client.insert(connection_data.connection.clone(), new_client_id);
+    state.next_client_id += 1;
 }
 
 fn register_client(
@@ -77,15 +102,42 @@ fn register_client(
 ){
     println!("Register Client");
 
-    let client_id = state.next_client_id;
-    state.client_to_connection.insert(client_id, connection_data.clone());
-    state.connection_to_client.insert(connection_data.clone(), client_id);
+    let new_client_id = state.next_client_id.clone();
+    register_connection(state, connection_data.clone());
     
     let packet = PacketMessage::new(PacketData::ClientHandshake(ClientHandshakePacket {}));
     state.game_peer.send(&connection_data.connection, &connection_data.stream, packet.write().unwrap()).unwrap();
 
     // todo : send data to shard
+
+    // todo: remove, test code vvvvvvv
+    if state.shard_to_connection.contains_key(&0u32) {
+        let keys = state.client_to_subscribed_keys.entry(new_client_id).or_insert_with(Vec::new);
+        keys.push("shard:0/player:42/*".to_string().into_bytes())
+    } else {
+        panic!("pas réussi à subscribe le client")
+    }
+    // todo: remove, test code ∧∧∧∧∧∧∧
+
     state.next_client_id += 1;
+}
+
+fn cleanup_disconnected_client(
+    state: &mut BrokerState,
+    game_connection: GameConnection)
+{
+    let Some(client_id) = state.game_connection_to_client.get(&game_connection).copied() else {return;};
+    let Some(connection_data) = state.client_to_connection.get(&client_id).clone() else {return;};
+
+    state.connection_to_client.remove(&connection_data);
+    state.game_connection_to_client.remove_entry(&game_connection);
+    state.client_to_subscribed_keys.remove(&client_id);
+    state.client_to_connection.remove(&client_id);
+    if state.shard_to_connection.contains_key(&client_id) {
+        state.shard_to_connection.remove(&client_id).unwrap();
+    }
+
+    println!("Client {} cleaned up", client_id);
 }
 
 fn register_spatial_server(
@@ -107,10 +159,7 @@ fn register_shard(
             println!("Register shard");
             // Dans ce cas, il le shard ne s'est jamais connecté au broker
             // On doit donc créé un nouveau client
-            let new_client_id = state.next_client_id;
-            state.client_to_connection.insert(new_client_id, connection_data.clone());
-            state.shard_to_connection.insert(new_client_id, connection_data);
-            state.next_client_id += 1;
+            register_connection(state, connection_data.clone());
         }
         Some(shard_id) => {
             state.shard_to_connection.insert(*shard_id, connection_data.clone());
@@ -154,6 +203,7 @@ fn publish_shard_state(
     connection_data: ConnectionData,
     topic: TopicTree,
 ){
+    println!("Publish Shard");
     register_shard(state, connection_data);
 
     let topic_name = topic.name.clone();
@@ -170,7 +220,10 @@ fn publish_shard_state(
         match tree_result.item.clone() {
             TopicTreeType::Leaf(_) => {}
             TopicTreeType::Node(topic) => {
-                if topic.data.iter().count() == 0 { continue; }
+                if topic.data.iter().count() == 0 {
+                    println!("il y a ZERO DONNÉE");
+                    continue;
+                }
                 // si on est ici, c'est qu'on a des données à envoyer
 
                 let Some(connection) = state.client_to_connection.get(client) else { continue; };
@@ -181,7 +234,14 @@ fn publish_shard_state(
                 );
                 let bytes = packet.write().unwrap();
 
-                state.game_peer.send(&connection.connection, &connection.stream, bytes).unwrap();
+
+                println!("on envoie une donnée à quelqu'un");
+                match state.game_peer.send(&connection.connection, &connection.stream, bytes) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("TungtungError: {}", e);
+                    }
+                };
             }
         }
     }
