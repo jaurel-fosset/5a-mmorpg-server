@@ -1,12 +1,11 @@
-﻿pub mod packet;
-
-use std::net;
+﻿use std::net;
 use std::sync;
 use lazy_static::lazy_static;
 use game_sockets as gs;
+use network_serialization::packet::{PacketData, PacketMessage};
+use network_serialization::packets::orchestrator::OrchestratorHelloPacket;
 use network_serialization::packets::Packet;
 use network_serialization::packets::spatial_server::*;
-use crate::network_connection::packet::OrchestratorPacket;
 use crate::network_object::entity::Entity;
 use crate::network_object::shard::ShardId;
 
@@ -54,20 +53,20 @@ impl NetworkGlobalState
             Some(packet) => packet,
         };
         
-        match packet
+        match packet.data
         {
-            OrchestratorPacket::Hello(hello_packet) => 
-            {
-                self.redis_ip = Some(hello_packet.redis_dns);
+            PacketData::OrchestratorHello(data) => {
+                self.redis_ip = Some(data.redis_dns);
             }
-            OrchestratorPacket::ShardCreation(_) => 
+            PacketData::ShardCreation(_) =>
             {
                 // TODO : handle shard creation
             }
-            OrchestratorPacket::ShardDestruction(_) => 
+            PacketData::ShardDestruction(_) =>
             {
                 // TODO : handle shard deletion
             }
+            _ => ()
         }
     }
 
@@ -75,8 +74,12 @@ impl NetworkGlobalState
     {
         if let Some(orchestrator) = &self.orchestrator
         {
-            let packet = AllocateShardsPacket::new(amount).write().unwrap();
-            match orchestrator.send(packet)
+            let packet = PacketMessage::new(
+                PacketData::AllocateShards(AllocateShardsPacket::new(amount))
+            );
+            let bytes = packet.write().unwrap();
+
+            match orchestrator.send(bytes)
             {
                 Ok(_) => (),
                 Err(_) => (),
@@ -88,8 +91,14 @@ impl NetworkGlobalState
     {
         if let Some(broker) = &self.broker
         {
-            let authority_gain = AuthoritySwitchPacket::new(old_shard.ip(), new_shard.ip(), entity.id().0).write().unwrap();
-            match broker.send(authority_gain)
+            let packet = PacketMessage::new(
+                PacketData::AuthoritySwitch(
+                    AuthoritySwitchPacket::new(old_shard.ip(), new_shard.ip(), entity.id().0)
+                )
+            );
+            let bytes = packet.write().unwrap();
+
+            match broker.send(bytes)
             {
                 Ok(_) => (),
                 Err(_) => (),
@@ -119,7 +128,7 @@ impl OrchestratorConnection
         }
     }
     
-    pub fn poll_single(&mut self) -> Option<OrchestratorPacket>
+    pub fn poll_single(&mut self) -> Option<PacketMessage>
     {
         let event = self.socket.poll();
 
@@ -154,14 +163,14 @@ impl OrchestratorConnection
             {
                 if self.connection != Some(connection) { return None; }
                 if self.command_stream != Some(stream) { return None; }
-                
-                let packet = match OrchestratorPacket::read(data)
-                { 
-                    Ok(packet) => packet,
-                    Err(error) => return None,
-                };
-                
-                Some(packet)
+
+                let msg = PacketMessage::read(data).unwrap();
+                match msg.data {
+                    PacketData::ShardCreation(_) => Some(msg),
+                    PacketData::ShardDestruction(_) => Some(msg),
+                    PacketData::OrchestratorHello(_) => Some(msg),
+                    _ => None,
+                }
             }
             gs::GameNetworkEvent::Error { .. } => None,
             gs::GameNetworkEvent::StreamCreated(connection, stream) =>

@@ -3,13 +3,14 @@ use bytes::{Bytes, BytesMut};
 use crate::packets::Packet;
 use crate::*;
 
-pub struct HelloPacket
+#[derive(Debug)]
+pub struct OrchestratorHelloPacket
 {
     pub orchestrator: Ipv6Addr,
     pub redis_dns: Ipv6Addr,
 }
 
-impl Serializable for HelloPacket
+impl Serializable for OrchestratorHelloPacket
 {
     fn serialize(self, stream: &mut BytesMut) -> Result<(), SerializationError>
     {
@@ -20,7 +21,7 @@ impl Serializable for HelloPacket
     }
 }
 
-impl Deserializable for HelloPacket
+impl Deserializable for OrchestratorHelloPacket
 {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
