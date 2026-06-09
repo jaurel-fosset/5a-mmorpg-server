@@ -1,24 +1,15 @@
-use std::collections::HashSet;
+use spatial_server::geometry::prelude as geo;
 use spatial_server::geometry::prelude::*;
-use spatial_server::network_object::entity::Entity;
-use spatial_server::network_object::{request_more_shards, switch_authority};
+use spatial_server::network_connection::{NetworkEvent, NetworkGlobalState};
+use spatial_server::network_object::entity::{Entity, EntityId, EntityManager};
 use spatial_server::network_object::shard::{ShardId, ShardManager};
 use spatial_server::quad_tree::QuadTree;
+use std::collections::HashSet;
 
 const MAX_AUTHORITY_SWITCH_RANGE: f32 = 100.0;
 
-fn update(quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entities: &mut [Entity])
-{
-    for entity in entities.iter_mut()
-    {
-        handle_authority_switch(quad_tree, shard_manager, entity);
-    }
 
-    let shards_to_allocate = quad_tree.split_and_fuse(shard_manager, entities);
-    request_more_shards(shards_to_allocate as u64);
-}
-
-fn handle_authority_switch(quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
+fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
 {
     let entity_position = *entity.position();
 
@@ -30,18 +21,18 @@ fn handle_authority_switch(quad_tree: &mut QuadTree, shard_manager: &mut ShardMa
     {
         Some(shard) => shard,
         None =>
-        {
-            eprintln!("Error : an entity is out of bound. This is either because of a deleted\
+            {
+                eprintln!("Error : an entity is out of bound. This is either because of a deleted\
             shard in use or the position is somehow really out of bounds");
-            return;
-        }
+                return;
+            }
     };
 
     let previous_shard = entity.current_shard();
 
     if current_shard != previous_shard
     {
-        switch_authority(current_shard, previous_shard, entity);
+        network_manager.switch_authority(current_shard, previous_shard, entity);
         entity.switch_current_shard(current_shard);
     }
 }
@@ -57,13 +48,91 @@ fn shard_in_subscribe_range(quad_tree: &mut QuadTree, shard_manager: &mut ShardM
     quad_tree.shards_near(shard_manager, subscribe_range)
         .into_iter()
         .filter(|shard_id|
-        {
-            shard_manager.in_subscribe_range(*shard_id, entity)
-                .expect("All the shard returned by the quad tree should be valid")
-        })
+            {
+                shard_manager.in_subscribe_range(*shard_id, entity)
+                    .expect("All the shard returned by the quad tree should be valid")
+            })
         .collect()
 }
 
-fn main() {
-    println!("Hello, world!");
+fn main()
+{
+    let map_bounds = Rect
+    {
+        x: 0.0,
+        y: 0.0,
+        width: 100.0,
+        height: 100.0,
+    };
+
+    let mut network = NetworkGlobalState::new();
+    let mut shard_manager = ShardManager::new();
+    let mut entity_manager = EntityManager::new();
+
+    network.request_more_shards(1);
+    let mut quad_tree = loop
+    {
+        if let Some(event) = network.poll_once()
+        {
+            match event
+            {
+                NetworkEvent::ShardCreation(ip) =>
+                    {
+                        shard_manager.on_receive_shard_creation(ip);
+                        let id = shard_manager.new_shard(map_bounds)
+                            .unwrap();
+                        break QuadTree::new(map_bounds, id);
+                    }
+                _ => (),
+            }
+        }
+    };
+
+    loop
+    {
+        if let Some(event) = network.poll_once()
+        {
+            match event
+            {
+                NetworkEvent::ShardCreation(ip) =>
+                    {
+                        shard_manager.on_receive_shard_creation(ip);
+                    }
+                NetworkEvent::ShardDestruction(ip) =>
+                    {
+                        let request_one_shard = shard_manager.on_receive_shard_deletion(ip);
+                        if request_one_shard
+                        {
+                            network.request_more_shards(1);
+                        }
+                    }
+                NetworkEvent::PositionUpdate(entity_positions) =>
+                    {
+                        let positions = entity_positions
+                            .into_iter()
+                            .map(|pos|
+                                {
+                                    let entity_id = EntityId(pos.0);
+                                    let position = geo::Position::new(pos.1, pos.2);
+                                    let shard_id = quad_tree.shard_for(position);
+
+                                    (entity_id, position, shard_id)
+                                })
+                            .collect();
+
+                        entity_manager.receive_new_entities(positions);
+
+                        for entity in entity_manager.entities()
+                        {
+                            handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, entity);
+                        }
+
+                        let shards_to_allocate = quad_tree
+                            .split_and_fuse(&mut shard_manager, entity_manager.entities());
+
+                        network.request_more_shards(shards_to_allocate as u64);
+                    }
+            }
+        }
+    }
 }

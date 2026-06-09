@@ -1,7 +1,6 @@
-﻿use std::collections::HashSet;
-use std::net::Ipv6Addr;
-use crate::geometry::prelude as geo;
+﻿use crate::geometry::prelude as geo;
 use crate::network_object::shard::ShardId;
+use std::collections::HashSet;
 
 pub struct EntityManager
 {
@@ -14,7 +13,7 @@ impl EntityManager
     {
         EntityManager { entities: Vec::new() }
     }
-    
+
     pub fn receive_new_entities(&mut self, entities: &[(EntityId, geo::Position, ShardId)])
     {
         let entities = entities.into_iter()
@@ -22,6 +21,11 @@ impl EntityManager
                 Entity::new(*entity_id, *pos, *shard_id)
             });
         self.entities.extend(entities);
+    }
+
+    pub fn entities(&mut self) -> &mut [Entity]
+    {
+        self.entities.as_mut_slice()
     }
 }
 
@@ -46,22 +50,22 @@ impl Entity
             subscribed_shard: HashSet::new(),
         }
     }
-    
+
     pub fn id(&self) -> EntityId
     {
         self.id
     }
-    
+
     pub fn position(&self) -> &geo::Position
     {
         &self.position
     }
-    
+
     pub fn current_shard(&self) -> ShardId
     {
         self.current_shard
     }
-    
+
     pub fn update_subscription(&mut self, shards: HashSet<ShardId>) -> Vec<ShardId>
     {
         let removed = self.subscribed_shard.difference(&shards)
@@ -69,7 +73,7 @@ impl Entity
         self.subscribed_shard = shards;
         removed
     }
-    
+
     pub fn switch_current_shard(&mut self, new_shard: ShardId)
     {
         self.current_shard = new_shard;
@@ -77,5 +81,5 @@ impl Entity
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub struct EntityId(pub Ipv6Addr);
+pub struct EntityId(pub u32);
 
