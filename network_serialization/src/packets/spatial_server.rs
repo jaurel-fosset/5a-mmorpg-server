@@ -2,6 +2,7 @@
 use bytes::{Bytes, BytesMut};
 use std::net::Ipv6Addr;
 
+#[derive(Debug)]
 pub struct AllocateShardsPacket
 {
     shard_count: u64,
@@ -34,6 +35,7 @@ impl Deserializable for AllocateShardsPacket
     }
 }
 
+#[derive(Debug)]
 pub struct DeAllocateShardsPacket
 {
     shards: Vec<Ipv6Addr>,
@@ -58,9 +60,10 @@ impl Deserializable for DeAllocateShardsPacket
     }
 }
 
+#[derive(Debug)]
 pub struct ShardCreationPacket
 {
-    shards: Vec<Ipv6Addr>,
+    pub shards: Vec<Ipv6Addr>,
 }
 
 impl Serializable for ShardCreationPacket
@@ -82,9 +85,10 @@ impl Deserializable for ShardCreationPacket
     }
 }
 
+#[derive(Debug)]
 pub struct ShardDestructionPacket
 {
-    shard: Ipv6Addr,
+    pub shard: Ipv6Addr,
 }
 
 impl Serializable for ShardDestructionPacket
@@ -106,6 +110,7 @@ impl Deserializable for ShardDestructionPacket
     }
 }
 
+#[derive(Debug)]
 pub struct AuthoritySwitchPacket
 {
     old_shard: Ipv6Addr,

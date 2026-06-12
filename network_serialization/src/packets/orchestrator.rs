@@ -1,15 +1,15 @@
-﻿use std::net::Ipv6Addr;
+﻿use crate::*;
 use bytes::{Bytes, BytesMut};
-use crate::packets::Packet;
-use crate::*;
+use std::net::Ipv6Addr;
 
-pub struct HelloPacket
+#[derive(Debug)]
+pub struct OrchestratorHelloPacket
 {
     pub orchestrator: Ipv6Addr,
     pub redis_dns: Ipv6Addr,
 }
 
-impl Serializable for HelloPacket
+impl Serializable for OrchestratorHelloPacket
 {
     fn serialize(self, stream: &mut BytesMut) -> Result<(), SerializationError>
     {
@@ -20,11 +20,11 @@ impl Serializable for HelloPacket
     }
 }
 
-impl Deserializable for HelloPacket
+impl Deserializable for OrchestratorHelloPacket
 {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
-        Self: Sized
+        Self: Sized,
     {
         let orchestrator = Ipv6Addr::deserialize(bytes)?;
         let redis_dns = Ipv6Addr::deserialize(bytes)?;

@@ -14,11 +14,15 @@ impl EntityManager
         EntityManager { entities: Vec::new() }
     }
 
-    pub fn receive_new_entities(&mut self, entities: &[(EntityId, geo::Position, ShardId)])
+    pub fn receive_new_entities<E>(&mut self, entities: E)
+    where
+        E: IntoIterator<Item=(EntityId, geo::Position, ShardId)>
     {
-        let entities = entities.into_iter()
-            .map(|(entity_id, pos, shard_id)| {
-                Entity::new(*entity_id, *pos, *shard_id)
+        let entities = entities
+            .into_iter()
+            .map(|(entity_id, pos, shard_id)|
+            {
+                Entity::new(entity_id, pos, shard_id)
             });
         self.entities.extend(entities);
     }

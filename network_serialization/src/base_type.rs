@@ -1,5 +1,5 @@
-﻿use bytes::{Buf, BufMut, BytesMut};
-use crate::{Deserializable, Serializable, SerializationError};
+﻿use crate::{Deserializable, Serializable, SerializationError};
+use bytes::{Buf, BufMut};
 
 impl Serializable for f32
 {
@@ -57,6 +57,23 @@ impl Deserializable for u8
     }
 }
 
+impl Serializable for i8
+{
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
+    {
+        stream.put_i8(self);
+        Ok(())
+    }
+}
+
+impl Deserializable for i8
+{
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
+    {
+        Ok(bytes.try_get_i8()?)
+    }
+}
+
 impl Serializable for u16
 {
     fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
@@ -74,6 +91,23 @@ impl Deserializable for u16
     }
 }
 
+impl Serializable for i16
+{
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
+    {
+        stream.put_i16(self);
+        Ok(())
+    }
+}
+
+impl Deserializable for i16
+{
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
+    {
+        Ok(bytes.try_get_i16()?)
+    }
+}
+
 impl Serializable for u32
 {
     fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
@@ -88,6 +122,23 @@ impl Deserializable for u32
     fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
     {
         Ok(bytes.try_get_u32()?)
+    }
+}
+
+impl Serializable for i32
+{
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
+    {
+        stream.put_i32(self);
+        Ok(())
+    }
+}
+
+impl Deserializable for i32
+{
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
+    {
+        Ok(bytes.try_get_i32()?)
     }
 }
 
@@ -130,7 +181,7 @@ impl Serializable for String
     fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
     {
         let bytes = self.as_bytes();
-        stream.put_u32(bytes.len() as u32); // longueur préfixée
+        stream.put_u32(bytes.len() as u32);
         stream.put_slice(bytes);
         Ok(())
     }
@@ -142,36 +193,46 @@ impl Deserializable for String
     {
         let len = bytes.try_get_u32()? as usize;
         let slice = bytes.copy_to_bytes(len);
-        String::from_utf8(slice.to_vec()).map_err(|e| { SerializationError::InvalidDeserializationState })
+        String::from_utf8(slice.to_vec()).map_err(|_| { SerializationError::InvalidDeserializationState })
     }
 }
 
-impl<T: Serializable> Serializable for Vec<T>
-{
-    fn serialize(self, stream: &mut BytesMut) -> Result<(), SerializationError>
-    {
-        stream.put_u64(self.len() as u64);
-        for item in self
-        {
-            item.serialize(stream)?;
+impl<T: Serializable, const N: usize> Serializable for [T; N] {
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError> {
+        for element in self {
+            element.serialize(stream)?;
         }
-
         Ok(())
     }
 }
 
-impl<T: Deserializable> Deserializable for Vec<T>
-{
-    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError>
-    {
-        let len = u64::deserialize(bytes)?;
-        let mut vec = Vec::with_capacity(len as usize);
-
-        for _ in 0..len
-        {
+impl<T: Deserializable, const N: usize> Deserializable for [T; N] {
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError> {
+        let mut vec = Vec::with_capacity(N);
+        for _ in 0..N {
             vec.push(T::deserialize(bytes)?);
         }
+        vec.try_into().map_err(|_| SerializationError::InvalidDeserializationState)
+    }
+}
 
+impl<T: Serializable> Serializable for Vec<T> {
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError> {
+        (self.len() as u16).serialize(stream)?;
+        for element in self {
+            element.serialize(stream)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: Deserializable> Deserializable for Vec<T> {
+    fn deserialize(bytes: &mut bytes::Bytes) -> Result<Self, SerializationError> {
+        let len = u16::deserialize(bytes)? as usize;
+        let mut vec = Vec::with_capacity(len);
+        for _ in 0..len {
+            vec.push(T::deserialize(bytes)?);
+        }
         Ok(vec)
     }
 }

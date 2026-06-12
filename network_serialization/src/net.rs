@@ -1,6 +1,6 @@
-use std::net::{Ipv4Addr, Ipv6Addr};
-use bytes::{Buf, BufMut, Bytes};
 use crate::{Deserializable, Serializable, SerializationError};
+use bytes::{Buf, BufMut};
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 impl Serializable for Ipv4Addr
 {

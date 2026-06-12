@@ -1,5 +1,4 @@
 use spatial_server::geometry::prelude as geo;
-use spatial_server::geometry::prelude::*;
 use spatial_server::network_connection::{NetworkEvent, NetworkGlobalState};
 use spatial_server::network_object::entity::{Entity, EntityId, EntityManager};
 use spatial_server::network_object::shard::{ShardId, ShardManager};
@@ -37,9 +36,9 @@ fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: 
     }
 }
 
-fn shard_in_subscribe_range(quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: Position) -> HashSet<ShardId>
+fn shard_in_subscribe_range(quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: geo::Position) -> HashSet<ShardId>
 {
-    let subscribe_range = Circle
+    let subscribe_range = geo::Circle
     {
         center: entity,
         radius: MAX_AUTHORITY_SWITCH_RANGE,
@@ -57,7 +56,7 @@ fn shard_in_subscribe_range(quad_tree: &mut QuadTree, shard_manager: &mut ShardM
 
 fn main()
 {
-    let map_bounds = Rect
+    let map_bounds = geo::Rect
     {
         x: 0.0,
         y: 0.0,
@@ -76,9 +75,13 @@ fn main()
         {
             match event
             {
-                NetworkEvent::ShardCreation(ip) =>
+                NetworkEvent::ShardCreation(addresses) =>
                     {
-                        shard_manager.on_receive_shard_creation(ip);
+                        for ip in addresses.into_iter()
+                        {
+                            shard_manager.on_receive_shard_creation(ip);
+                        }
+
                         let id = shard_manager.new_shard(map_bounds)
                             .unwrap();
                         break QuadTree::new(map_bounds, id);
@@ -94,9 +97,12 @@ fn main()
         {
             match event
             {
-                NetworkEvent::ShardCreation(ip) =>
+                NetworkEvent::ShardCreation(adresses) =>
                     {
-                        shard_manager.on_receive_shard_creation(ip);
+                        for ip in adresses.into_iter()
+                        {
+                            shard_manager.on_receive_shard_creation(ip);
+                        }
                     }
                 NetworkEvent::ShardDestruction(ip) =>
                     {
@@ -110,15 +116,14 @@ fn main()
                     {
                         let positions = entity_positions
                             .into_iter()
-                            .map(|pos|
-                                {
-                                    let entity_id = EntityId(pos.0);
-                                    let position = geo::Position::new(pos.1, pos.2);
-                                    let shard_id = quad_tree.shard_for(position);
+                            .flat_map(|pos|
+                            {
+                                let entity_id = EntityId(pos.0);
+                                let position = geo::Position::new(pos.1, pos.2);
+                                let shard_id = quad_tree.shard_for(position)?;
 
-                                    (entity_id, position, shard_id)
-                                })
-                            .collect();
+                                Some((entity_id, position, shard_id))
+                            });
 
                         entity_manager.receive_new_entities(positions);
 

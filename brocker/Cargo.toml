@@ -1,0 +1,10 @@
+[package]
+name = "brocker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+game_sockets = { path = "../game_sockets" }
+tokio = "1.52.3"
+bytes = "1.11.1"
+network_serialization = { path = "../network_serialization" }
