@@ -66,12 +66,15 @@ impl Entity
         self.current_shard
     }
 
-    pub fn update_subscription(&mut self, shards: HashSet<ShardId>) -> Vec<ShardId>
+    pub fn update_subscription(&mut self, shards: HashSet<ShardId>) -> (Vec<ShardId>, Vec<ShardId>)
     {
+        let added = shards.difference(&self.subscribed_shard)
+            .copied().collect::<Vec<_>>();
         let removed = self.subscribed_shard.difference(&shards)
             .copied().collect::<Vec<_>>();
         self.subscribed_shard = shards;
-        removed
+
+        (added, removed)
     }
 
     pub fn switch_current_shard(&mut self, new_shard: ShardId)
