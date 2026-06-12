@@ -1,10 +1,14 @@
 ﻿use std::net;
+use std::str::FromStr;
 use std::sync;
 use lazy_static::lazy_static;
 use game_sockets as gs;
+use game_sockets::{GameConnection, GameStream};
+use network_serialization::Deserializable;
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::Packet;
 use network_serialization::packets::spatial_server::*;
+use network_serialization::packets::topic::TopicTreeType;
 use crate::network_connection::NetworkEvent::{ShardCreation, ShardDestruction};
 use crate::network_object::entity::Entity;
 use crate::network_object::shard::ShardId;
@@ -39,6 +43,13 @@ impl NetworkGlobalState
             broker: None,
         }
     }
+
+    pub fn broker_send(&self, bytes: bytes::Bytes) -> Result<(), NetworkError>
+    {
+        let broker = self.broker.as_ref().ok_or(NetworkError::ConnectionPartiallyInitialised)?;
+        broker.send(bytes)
+    }
+
 
     pub fn poll_once(&mut self) -> Option<NetworkEvent>
     {
@@ -247,14 +258,75 @@ impl BrokerSocket
                 if self.connection.is_some() { return; }
                 
                 self.connection = Some(connection);
-                let _ = self
-                    .socket
+                let _ = self.socket
                     .create_stream(connection, gs::GameStreamReliability::Reliable);
             }
             gs::GameNetworkEvent::Disconnected(_) => {}
-            gs::GameNetworkEvent::Message { .. } =>
+            gs::GameNetworkEvent::Message { connection, stream, data } =>
             {
-                // TODO : read positions publish
+                let packet = PacketMessage::read(data).unwrap();
+
+                match packet.data
+                {
+                    PacketData::Broadcast(packet) =>
+                    {
+                        if packet.topic.name != "entities"
+                        {
+                            eprintln!("[Network] Received unexpected broadcast packet {}", packet.topic.name);
+                            return;
+                        }
+
+                        let positions = match packet.topic.get_sub_tree("positions")
+                        {
+                            Some(positions) => positions,
+                            None =>
+                            {
+                                eprintln!("[Network] Received ill-formed broadcast packet");
+                                return;
+                            }
+                        };
+
+                        let positions = match positions.item
+                        {
+                            TopicTreeType::Leaf(_) => return,
+                            TopicTreeType::Node(node) => node.data,
+                        };
+
+                        let positions = positions
+                            .into_iter()
+                            .flat_map(|topic|
+                            {
+                                match topic.item
+                                {
+                                    TopicTreeType::Node(node) => None,
+                                    TopicTreeType::Leaf(node) => Some((topic.name, node.data())),
+                                }
+                            })
+                            .flat_map(|(name, data)|
+                            {
+                                let mut bytes = bytes::Bytes::from(data);
+                                let x = match f32::deserialize(&mut bytes)
+                                {
+                                    Ok(x) => x,
+                                    Err(_) => return None,
+                                };
+                                let y = match f32::deserialize(&mut bytes)
+                                {
+                                    Ok(x) => x,
+                                    Err(_) => return None,
+                                };
+
+                                let client_id = match u32::from_str(&name)
+                                {
+                                    Ok(client_id) => client_id,
+                                    Err(_) => return None,
+                                };
+
+                                Some((client_id, x, y))
+                            });
+                    }
+                    _ => ()
+                }
             }
             gs::GameNetworkEvent::Error { .. } => {}
             gs::GameNetworkEvent::StreamCreated(connection, stream) =>
@@ -283,8 +355,11 @@ impl BrokerSocket
     }
 }
 
-enum NetworkError
+#[derive(thiserror::Error, Debug)]
+pub enum NetworkError
 {
+    #[error("Error while sending the message")]
     SendError,
+    #[error("Connection partially initialised")]
     ConnectionPartiallyInitialised,
 }
