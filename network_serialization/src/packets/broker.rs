@@ -44,35 +44,35 @@ impl Deserializable for UnsubscribePacket {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PublishPacket{
-    pub topic: TopicTree,
+    pub data: Vec<TopicTree>,
 }
 impl Serializable for PublishPacket {
     fn serialize(self, bytes: &mut BytesMut) -> Result<(), SerializationError> {
-        self.topic.serialize(bytes)?;
+        self.data.serialize(bytes)?;
         Ok(())
     }
 }
 impl Deserializable for PublishPacket {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError> {
-        let topic = TopicTree::deserialize(bytes)?;
-        Ok(Self { topic })
+        let topic = Vec::<TopicTree>::deserialize(bytes)?;
+        Ok(Self { data: topic })
     }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct BroadcastPacket{
-    pub topic: TopicTree,
+    pub data: Vec<TopicTree>,
 }
 impl Serializable for BroadcastPacket {
     fn serialize(self, bytes: &mut BytesMut) -> Result<(), SerializationError> {
-        self.topic.serialize(bytes)?;
+        self.data.serialize(bytes)?;
         Ok(())
     }
 }
 impl Deserializable for BroadcastPacket {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError> {
-        let topic = TopicTree::deserialize(bytes)?;
-        Ok(Self { topic })
+        let topic = Vec::<TopicTree>::deserialize(bytes)?;
+        Ok(Self { data: topic })
     }
 }
 

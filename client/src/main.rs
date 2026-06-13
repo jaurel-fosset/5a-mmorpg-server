@@ -18,7 +18,7 @@ fn main() {
         .init_resource::<PlayerInput>()
 
         .add_systems(Startup, setup_camera_system)
-        .add_systems(Update, (handle_input_system, send_inputs_to_network_system))
+        .add_systems(Update, (handle_input_system, send_inputs_to_network_system, receive_network_system))
         .add_systems(EguiPrimaryContextPass, ui_example_system)
         .run();
 }
@@ -225,9 +225,34 @@ fn send_inputs_to_network_system(
 
     let packet = PacketMessage::new(
         PacketData::ClientInputBroker(
-            ClientInputBrokerPacket{ input:inputs}
-        ));
+            ClientInputBrokerPacket{ input:inputs }
+        )
+    );
 
     println!("Envoi au serveur : {:?}", packet);
     peer.send(&connection, &stream, packet.write().unwrap()).unwrap();
+}
+
+fn receive_network_system(
+    mut network_state: ResMut<NetworkState>,
+) {
+    let NetworkState::Connected { connection, ref mut peer, ref stream } = *network_state else { return; };
+
+    match peer.poll() {
+        Ok(Some(GameNetworkEvent::Message { data, .. })) => {
+            let msg = PacketMessage::read(data).unwrap();
+            match msg.data {
+                PacketData::Broadcast(packet) => {
+                    for tree in packet.data {
+                        let flat = tree.flatten();
+                        for (key, value) in flat {
+                            println!("Reçu: {} → {:?}", String::from_utf8(key).unwrap(), value);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
 }

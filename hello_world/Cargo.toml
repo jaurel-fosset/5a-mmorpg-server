@@ -1,0 +1,9 @@
+[package]
+name = "hello_world"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+game_sockets = { path = "../game_sockets" }
+network_serialization = { path = "../network_serialization" }
+bytes = "1.11.1"

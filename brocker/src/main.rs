@@ -57,9 +57,10 @@ async fn main() {
                 match msg.data {
                     PacketData::Subscribe(packet) => subscribe_client(&mut broker, connection_data, packet.client_id, packet.topic),
                     PacketData::Unsubscribe(packet) => unsubscribe_client(&mut broker, connection_data, packet.client_id, packet.topic),
-                    PacketData::Publish(packet) => publish_shard_state(&mut broker, connection_data, packet.topic),
+                    PacketData::Publish(packet) => publish_shard_state(&mut broker, connection_data, packet),
                     PacketData::ClientInputBroker(packet) => handle_player_input(&mut broker, connection_data, packet.input),
                     PacketData::ClientHello(packet) => register_client(&mut broker, connection_data),
+
                     _ => println!("Unexpected message received")
                 }
             }
@@ -94,6 +95,7 @@ fn register_connection(
     state.connection_to_client.insert(connection_data.clone(), new_client_id);
     state.game_connection_to_client.insert(connection_data.connection.clone(), new_client_id);
     state.next_client_id += 1;
+    println!("J'ai register le client {}", new_client_id);
 }
 
 fn register_client(
@@ -111,15 +113,13 @@ fn register_client(
     // todo : send data to shard
 
     // todo: remove, test code vvvvvvv
-    if state.shard_to_connection.contains_key(&0u32) {
+    /*if state.shard_to_connection.contains_key(&0u32) {
         let keys = state.client_to_subscribed_keys.entry(new_client_id).or_insert_with(Vec::new);
-        keys.push("shard:0/player:42/*".to_string().into_bytes())
+            keys.push(("entities/position/".to_owned()+ &*new_client_id.to_string()).to_string().into_bytes())
     } else {
         panic!("pas réussi à subscribe le client")
-    }
+    }*/
     // todo: remove, test code ∧∧∧∧∧∧∧
-
-    state.next_client_id += 1;
 }
 
 fn cleanup_disconnected_client(
@@ -178,8 +178,8 @@ fn subscribe_client(
     let keys = topic.keys();
     let subscribed_key  = state.client_to_subscribed_keys.entry(client_id).or_insert(Vec::new());
     for key in keys {
-        subscribed_key.push(key);
-        println!("Subscribed client {} to {}", client_id ,subscribed_key.len());
+        subscribed_key.push(key.clone());
+        println!("Subscribed client {} to {:?}", client_id ,key);
     }
 }
 
@@ -201,49 +201,45 @@ fn unsubscribe_client(
 fn publish_shard_state(
     state: &mut BrokerState,
     connection_data: ConnectionData,
-    topic: TopicTree,
+    packet: PublishPacket,
 ){
     println!("Publish Shard");
     register_shard(state, connection_data);
 
-    let topic_name = topic.name.clone();
-
     for (client, keys) in &state.client_to_subscribed_keys {
-        let mut tree_result = TopicTree::new_empty(topic_name.clone());
-        for key in keys {
-            let Ok(key_string) = String::from_utf8(key.clone()) else {continue;};
-            let Some(sub_tree) = topic.get_sub_tree(&*key_string) else {continue};
-            tree_result.merge(&sub_tree);
-        }
 
+        let mut topics_to_send = Vec::<TopicTree>::new();
 
-        match tree_result.item.clone() {
-            TopicTreeType::Leaf(_) => {}
-            TopicTreeType::Node(topic) => {
-                if topic.data.iter().count() == 0 {
-                    println!("il y a ZERO DONNÉE");
-                    continue;
-                }
-                // si on est ici, c'est qu'on a des données à envoyer
-
-                let Some(connection) = state.client_to_connection.get(client) else { continue; };
-                let packet = PacketMessage::new(
-                    PacketData::Broadcast(
-                        BroadcastPacket{topic:tree_result}
-                    )
-                );
-                let bytes = packet.write().unwrap();
-
-
-                println!("on envoie une donnée à quelqu'un");
-                match state.game_peer.send(&connection.connection, &connection.stream, bytes) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        println!("TungtungError: {}", e);
-                    }
-                };
+        for tree_from_packet in packet.data.iter() {
+            let mut potential_sub_tree = TopicTree::new_empty(tree_from_packet.name.clone());
+            for key in keys {
+                let Ok(key_string) = String::from_utf8(key.clone()) else {continue;};
+                let Some(sub_tree) = tree_from_packet.get_sub_tree(&*key_string) else {continue};
+                potential_sub_tree.merge(&sub_tree);
             }
+
+            let TopicTreeType::Node(topic) = potential_sub_tree.item.clone() else {continue;};
+            // S'il y a zéro donnée
+            if topic.data.iter().count() == 0 {continue;}
+            topics_to_send.push(potential_sub_tree);
         }
+
+        if topics_to_send.len() == 0 {continue;}
+        println!("on s'apprête à envoyer de la donnée à client {}",client);
+        let Some(connection) = state.client_to_connection.get(client) else { continue; };
+        println!("on s'apprête à envoyer de la donnée à connection {:?}",&connection.connection);
+        let packet = PacketMessage::new(
+            PacketData::Broadcast(
+                BroadcastPacket{ data:topics_to_send },
+            )
+        );
+        let bytes = packet.write().unwrap();
+
+        println!("on envoie une donnée à quelqu'un");
+        match state.game_peer.send(&connection.connection, &connection.stream, bytes){
+            Ok(_) => {}
+            Err(e) => {println!("Error during \"publish_shard state\": {}", e);}
+        };
     }
 }
 
@@ -256,13 +252,10 @@ fn handle_player_input(
 
     let Some(client_id) = state.connection_to_client.get(&connection_data) else {return;};
 
-    let tree_input = TopicTree {
-        name: "input".to_string(),
-        item: TopicTreeType::Leaf(TopicLeaf::new(Vec::from(input)))
-    };
-
-    let mut tree_player = TopicTree::new_empty(client_id.to_string());
-    tree_player.add_tree(tree_input);
+    let mut tree_entities = TopicTree::new_empty("entities".to_string());
+    let mut tree_input = TopicTree::new_empty("input".to_string());
+    tree_input.add_leaf(client_id.to_string(),input.to_vec());
+    tree_entities.add_tree(tree_input);
 
     /* Code pour tester le hash et récupérer la donnée
     let hash = tree_player.clone().flatten();
@@ -274,13 +267,13 @@ fn handle_player_input(
 
     println!("Player {:?} input: {:?}", client_id, input);*/
 
-    let key_name : String = client_id.to_string()+"/input";
+    let key_name : String = "entities/input/".to_owned() + &*client_id.to_string();
     let key_vec = Vec::<u8>::from(key_name.as_bytes());
 
     let packet = PacketMessage::new(
-        PacketData::Publish(
-            PublishPacket{
-                topic: tree_player,
+        PacketData::Broadcast(
+            BroadcastPacket{
+                data: vec!(tree_entities),
             }
         )
     );

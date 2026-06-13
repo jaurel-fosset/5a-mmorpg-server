@@ -1,0 +1,9 @@
+[package]
+name = "fake_shard"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+network_serialization = { path = "../network_serialization" }
+bytes = "1.11.1"
+game_sockets = { path = "../game_sockets" }
