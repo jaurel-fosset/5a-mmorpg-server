@@ -179,8 +179,15 @@ fn subscribe_client(
     let keys = topic.keys();
     let subscribed_key  = state.client_to_subscribed_keys.entry(client_id).or_insert(Vec::new());
     for key in keys {
-        subscribed_key.push(key.clone());
-        println!("Subscribed client {} to {:?}", client_id ,key);
+        let key_str = String::from_utf8(key.clone()).unwrap();
+        if key_str.ends_with("/*") {
+            // Stocke sans le "/*" final → "entities/input"
+            let trimmed = key_str.trim_end_matches("/*").to_string();
+            subscribed_key.push(trimmed.into_bytes());
+        } else {
+            subscribed_key.push(key);
+        }
+        println!("Subscribed client {} to {:?}", client_id, subscribed_key.last());
     }
 }
 
@@ -282,12 +289,17 @@ fn handle_player_input(
     );
     let bytes: Bytes = packet.write().unwrap();
 
-    for (key,value) in state.client_to_subscribed_keys.iter() {
-        if value.contains(&key_vec) {
-            let Some(connection) = state.client_to_connection.get(key) else {break;};
+    for (subscriber_id, subscribed_keys) in state.client_to_subscribed_keys.iter() {
+        let matches = subscribed_keys.iter().any(|key| {
+            let key_str = String::from_utf8(key.clone()).unwrap_or_default();
+            key_name.starts_with(&key_str)
+        });
+
+        if matches {
+            let Some(connection) = state.client_to_connection.get(subscriber_id) else { continue; };
             state.game_peer.send(
                 &connection.connection,
-                &connection_data.stream,
+                &connection.stream,
                 bytes.clone()
             ).unwrap();
         }

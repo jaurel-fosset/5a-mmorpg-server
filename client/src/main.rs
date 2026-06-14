@@ -224,7 +224,7 @@ fn send_inputs_to_network_system(
         )
     );
 
-    println!("Envoi au serveur : {:?}", packet);
+    //println!("Envoi au serveur : {:?}", packet);
     peer.send(&connection, &stream, packet.write().unwrap()).unwrap();
 }
 

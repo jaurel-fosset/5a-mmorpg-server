@@ -42,7 +42,7 @@ fn main() {
     // on va subscribe le client 1 (fake_shard) aux input du client 2 (client)
     let mut tree_entities = TopicTree::new_empty("entities".to_string());
     let mut tree_input = TopicTree::new_empty("input".to_string());
-    tree_input.add_leaf("2".to_string(),Vec::new());
+    tree_input.add_leaf("*".to_string(),Vec::new());
     tree_entities.add_tree(tree_input);
 
     let packet = PacketMessage::new(
@@ -60,7 +60,7 @@ fn main() {
     // on va subscribe le client 2 (client) à sa position géré par le client 1 (fake_shard)
     let mut tree_entities = TopicTree::new_empty("entities".to_string());
     let mut tree_position = TopicTree::new_empty("position".to_string());
-    tree_position.add_leaf("2".to_string(),Vec::new());
+    tree_position.add_leaf("*".to_string(),Vec::new());
     tree_entities.add_tree(tree_position);
 
     let packet = PacketMessage::new(

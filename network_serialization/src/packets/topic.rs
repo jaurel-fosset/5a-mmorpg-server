@@ -36,6 +36,13 @@ impl TopicTree {
         }
     }
 
+    pub fn get_child(&self, name: &str) -> Option<&TopicTree> {
+        match &self.item {
+            TopicTreeType::Node(node) => node.data.iter().find(|t| t.name == name),
+            TopicTreeType::Leaf(_) => None,
+        }
+    }
+
     pub fn keys(self) -> Vec<Vec<u8>> {
         match self.item {
             TopicTreeType::Leaf(_) => vec!(Vec::from(self.name)),
@@ -112,7 +119,7 @@ impl TopicTree {
                 }
 
                 match (&self.item, rest) {
-                    (TopicTreeType::Leaf(leaf), None) => Some(self.clone()),
+                    (_, None) => Some(self.clone()),
                     (TopicTreeType::Node(nodes), Some(remaining)) => {
                         let mut sub_tree = Self::new_empty(self.clone().name);
                         for child in &nodes.data {
@@ -185,7 +192,7 @@ impl TopicNode {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TopicLeaf {
-    data: Vec<u8>
+    pub data: Vec<u8>
 }
 
 impl TopicLeaf {

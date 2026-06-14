@@ -7,7 +7,7 @@ use network_serialization::{Deserializable, Serializable};
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::Packet;
 use network_serialization::packets::broker::{PublishPacket};
-use network_serialization::packets::topic::TopicTree;
+use network_serialization::packets::topic::{TopicTree, TopicTreeType};
 use std::time::{Duration, Instant};
 
 #[derive(Default)]
@@ -20,10 +20,6 @@ fn main() {
     println!("Hello, world!");
 
     let mut shard_state = ShardState::default();
-    let data_position = &mut shard_state.data_position;
-    data_position.insert(2,[100,200]);
-    data_position.insert(3,[300,500]);
-    data_position.insert(4,[400,500]);
 
     let backend = game_sockets::protocols::QuicBackend::new();
     let mut peer = game_sockets::GamePeer::new(backend);
@@ -57,11 +53,19 @@ fn main() {
                     let msg = PacketMessage::read(data).unwrap();
                     match msg.data {
                         PacketData::Broadcast(packet) => for tree in packet.data {
-                            let Some(data) = tree.get("entities/input/2") else {break;};
-                            let mut bytes : Bytes = Bytes::copy_from_slice(data);
-                            let Ok(inputs) = <[InputData;16]>::deserialize(&mut bytes) else {break;};
 
-                            move_entity(&mut shard_state, 2u32, inputs);
+                            // On récupère les inputs
+                            let Some(input_tree) = tree.get_child("input") else { break; };
+                            let TopicTreeType::Node(input_topic_node) = &input_tree.item else {break;};
+                            for topic_tree in &input_topic_node.data {
+                                let TopicTreeType::Leaf(leaf) = &topic_tree.item else {continue;};
+                                println!("topic_tree.name: {:?}", topic_tree.name);
+                                let Ok(client_id) = topic_tree.name.parse::<u32>() else {continue;};
+                                let data = &leaf.data;
+                                let mut bytes : Bytes = Bytes::copy_from_slice(data);
+                                let Ok(inputs) = <[InputData;16]>::deserialize(&mut bytes) else {continue;};
+                                move_entity(&mut shard_state, client_id, inputs);
+                            }
                         },
                         _ => {}
                     }
@@ -72,45 +76,12 @@ fn main() {
         }
 
 
-        let mut tree_entities = TopicTree::new_empty("entities".to_string());
-        // Position
-        let mut tree_position = TopicTree::new_empty("position".to_string());
-
-        for (key, value) in shard_state.data_position.clone() {
-            let mut bytes = BytesMut::new();
-            let _ = value.serialize(&mut bytes);
-            tree_position.add_leaf(key.to_string(), Vec::<u8>::from(bytes));
-        }
-
-        tree_entities.add_tree(tree_position);
-
-        // Velocity
-        let mut tree_velocity = TopicTree::new_empty("velocity".to_string());
-
-        let pos: Vec<i32> = vec![150, 400];
-        let mut bytes = BytesMut::new();
-        let _ = pos.serialize(&mut bytes);
-        tree_velocity.add_leaf("2".to_string(), Vec::<u8>::from(bytes));
-
-        let pos: Vec<i32> = vec![0, -500];
-        let mut bytes = BytesMut::new();
-        let _ = pos.serialize(&mut bytes);
-        tree_velocity.add_leaf("3".to_string(), Vec::<u8>::from(bytes));
-
-        tree_entities.add_tree(tree_velocity);
-
-        /*
-        if let Some(sub) = tree_entities.get_sub_tree("shard:0/\*") {
-            for (key, value) in sub.flatten() {
-                println!("{} → {:?}", String::from_utf8(key).unwrap(), value);
-            }
-        }
-         */
+        let tree_entities = build_entities_tree(&shard_state);
+        println!("{:?}", tree_entities);
 
         let packet = PacketMessage::new(PacketData::Publish(PublishPacket {
             data: vec![tree_entities],
         }));
-
         let bytes = packet.write().unwrap();
 
         peer.send(&conn, &stream, bytes).unwrap();
@@ -129,11 +100,11 @@ use network_serialization::input::{DirectionFlags, InputData};
 
 fn move_entity(
     shard_state: &mut ShardState,
-    u: u32,
+    client_id: u32,
     inputs: [InputData; 16],
 ) {
-    let Some(position) = shard_state.data_position.get_mut(&u) else {return;};
-    let last_sequence = shard_state.last_input_sequence.entry(u).or_insert(0);
+    let position = shard_state.data_position.entry(client_id).or_insert([0, 0]);
+    let last_sequence = shard_state.last_input_sequence.entry(client_id).or_insert(0);
 
     //println!("Position: {:?}, Input: {:?}", position, last_sequence);
 
@@ -157,4 +128,18 @@ fn move_entity(
             }
         }
     }
+}
+
+fn build_entities_tree(shard_state: &ShardState) -> TopicTree {
+    let mut tree_entities = TopicTree::new_empty("entities".to_string());
+    // Position
+    let mut tree_position = TopicTree::new_empty("position".to_string());
+    for (key, value) in shard_state.data_position.iter() {
+        let mut bytes = BytesMut::new();
+        let _ = value.serialize(&mut bytes);
+        tree_position.add_leaf(key.to_string(), Vec::<u8>::from(bytes));
+    }
+
+    tree_entities.add_tree(tree_position);
+    tree_entities
 }
