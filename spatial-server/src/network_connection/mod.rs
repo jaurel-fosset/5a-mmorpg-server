@@ -1,4 +1,5 @@
-﻿use std::net;
+﻿use std::cmp::PartialEq;
+use std::net;
 use std::str::FromStr;
 use std::sync;
 use lazy_static::lazy_static;
@@ -122,7 +123,7 @@ impl NetworkGlobalState
         {
             PacketData::Broadcast(data) =>
             {
-                Some(NetworkEvent::PositionUpdate(position_broadcast_handling(data)?.collect()))
+                Some(NetworkEvent::PositionUpdate(position_update_broadcast(data)?.collect()))
             }
             _ => None,
         }
@@ -347,35 +348,66 @@ pub enum NetworkError
     ConnectionPartiallyInitialised,
 }
 
-fn position_broadcast_handling(packet: BroadcastPacket) -> Option<impl Iterator<Item=(u32, f32, f32)>>
+fn parse_broadcast(packet: BroadcastPacket)
 {
-    if packet.topic.name != "entities"
+    if packet.topic.name == "orchestrator"
+    {
+        server_allocation_broadcast(packet);
+    }
+    else if packet.topic.name == "entities"
+    {
+
+    }
+    else
     {
         eprintln!("[Network] Received unexpected broadcast packet {}", packet.topic.name);
-        return None;
     }
+}
 
-    let positions = match packet.topic.get_sub_tree("positions")
-    {
-        Some(positions) => positions,
-        None =>
+fn server_allocation_broadcast(packet: BroadcastPacket) -> (Option<impl Iterator<Item=u32>>, Option<impl Iterator<Item=u32>>)
+{
+    let creations = packet.topic
+        .get_sub_tree("server_creations")
+        .and_then(|creations|
             {
-                eprintln!("[Network] Received ill-formed broadcast packet");
-                return None;
+                match get_children(creations)
+                {
+                    Some(creations) => Some(broadcast_extract_shard(creations)),
+                    None =>
+                    {
+                        eprintln!("[Network] orchestrator:server_creations is a leaf (expected children)");
+                        None
+                    }
+                }
+            });
+
+    let deletions = packet.topic
+        .get_sub_tree("server_deletions")
+        .and_then(|deletions|
+        {
+            match get_children(deletions)
+            {
+                Some(deletions) => Some(broadcast_extract_shard(deletions)),
+                None =>
+                {
+                    eprintln!("[Network] orchestrator:server_deletions is a leaf (expected children)");
+                    None
+                }
             }
-    };
+        });
 
-    let positions = match positions.item
+    (creations, deletions)
+}
+
+fn get_children(node: TopicTree) -> Option<impl Iterator<Item=(String, Vec<u8>)>>
+{
+    let children = match node.item
     {
-        TopicTreeType::Leaf(_) =>
-            {
-                eprintln!("[Network] entities:positions is a leaf (expected childrens)");
-                return None;
-            },
+        TopicTreeType::Leaf(_) => return None,
         TopicTreeType::Node(node) => node.data,
     };
 
-    let positions = positions
+    let children = children
         .into_iter()
         .flat_map(|topic|
             {
@@ -384,29 +416,98 @@ fn position_broadcast_handling(packet: BroadcastPacket) -> Option<impl Iterator<
                     TopicTreeType::Node(_) => None,
                     TopicTreeType::Leaf(node) => Some((topic.name, node.data())),
                 }
-            })
-        .flat_map(|(name, data)|
-            {
-                let mut bytes = bytes::Bytes::from(data);
-                let x = match f32::deserialize(&mut bytes)
-                {
-                    Ok(x) => x,
-                    Err(_) => return None,
-                };
-                let y = match f32::deserialize(&mut bytes)
-                {
-                    Ok(x) => x,
-                    Err(_) => return None,
-                };
+            });
 
-                let client_id = match u32::from_str(&name)
+    Some(children)
+}
+
+fn broadcast_extract_shard<T>(data: T) -> impl Iterator<Item=u32>
+    where
+        T: IntoIterator<Item=(String, Vec<u8>)>,
+{
+    data.into_iter()
+        .flat_map(|(topic_name, node_data)|
+            {
+                let shard_id = match u32::from_str(&topic_name)
                 {
                     Ok(client_id) => client_id,
                     Err(_) => return None,
                 };
 
-                Some((client_id, x, y))
-            });
+                let server_type: ServerType = ServerType::try_from(*node_data.get(0)?).ok()?;
 
-    Some(positions)
+                Some((shard_id, server_type))
+            })
+        .flat_map(|(shard_id, server_type)|
+            {
+                if server_type != ServerType::Shard { return None; }
+
+                Some(shard_id)
+            })
+}
+
+
+fn position_update_broadcast(packet: BroadcastPacket) -> Option<impl Iterator<Item=(u32, f32, f32)>>
+{
+    let positions = match packet.topic.get_sub_tree("positions")
+    {
+        Some(positions) => positions,
+        None =>
+        {
+            eprintln!("[Network] Received ill-formed broadcast packet");
+            return None;
+        }
+    };
+
+    let positions = match get_children(positions)
+    {
+        Some(positions) => positions,
+        None =>
+        {
+            eprintln!("[Network] entities:positions is a leaf (expected childrens)");
+            return None;
+        }
+    };
+
+    Some(broadcast_extract_positions(positions))
+}
+
+fn broadcast_extract_positions<T>(data: T) -> impl Iterator<Item=(u32, f32, f32)>
+where
+    T: IntoIterator<Item=(String, Vec<u8>)>,
+{
+    data
+        .into_iter()
+        .flat_map(|(name, data)|
+        {
+            let mut bytes = bytes::Bytes::from(data);
+            let x = match f32::deserialize(&mut bytes)
+            {
+                Ok(x) => x,
+                Err(_) => return None,
+            };
+            let y = match f32::deserialize(&mut bytes)
+            {
+                Ok(x) => x,
+                Err(_) => return None,
+            };
+
+            let client_id = match u32::from_str(&name)
+            {
+                Ok(client_id) => client_id,
+                Err(_) => return None,
+            };
+
+            Some((client_id, x, y))
+        })
+}
+
+#[repr(u8)]
+#[derive(int_enum::IntEnum, Debug, Eq, PartialEq)]
+enum ServerType
+{
+    Orchestrator = 0,
+    Broker,
+    Spatial,
+    Shard,
 }
