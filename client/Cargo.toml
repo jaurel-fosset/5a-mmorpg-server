@@ -8,4 +8,4 @@ bevy = {workspace = true}
 game_sockets = { path = "../game_sockets" }
 network_serialization = { path = "../network_serialization" }
 bevy_egui = "0.39.1"
-bitflags = "2.11.1"
+circular-buffer = "1.2.0"

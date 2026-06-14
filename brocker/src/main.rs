@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::time::Duration;
-use bytes::{Bytes};
+use bytes::{Bytes, BytesMut};
 use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream};
 use network_serialization::packet::{PacketData, PacketMessage};
-use network_serialization::packets::broker::{BroadcastPacket, ClientHandshakePacket, PublishPacket};
+use network_serialization::packets::broker::{BroadcastPacket, ClientHandshakePacket, ClientInputBrokerPacket, PublishPacket};
 use network_serialization::packets::Packet;
-use network_serialization::packets::topic::{TopicLeaf, TopicNode, TopicTree, TopicTreeType};
+use network_serialization::packets::topic::{TopicTree, TopicTreeType};
+use network_serialization::Serializable;
 
 #[derive(Clone, Hash, Eq, PartialEq, Default)]
 struct ConnectionData {
@@ -58,7 +59,7 @@ async fn main() {
                     PacketData::Subscribe(packet) => subscribe_client(&mut broker, connection_data, packet.client_id, packet.topic),
                     PacketData::Unsubscribe(packet) => unsubscribe_client(&mut broker, connection_data, packet.client_id, packet.topic),
                     PacketData::Publish(packet) => publish_shard_state(&mut broker, connection_data, packet),
-                    PacketData::ClientInputBroker(packet) => handle_player_input(&mut broker, connection_data, packet.input),
+                    PacketData::ClientInputBroker(packet) => handle_player_input(&mut broker, connection_data, packet),
                     PacketData::ClientHello(packet) => register_client(&mut broker, connection_data),
 
                     _ => println!("Unexpected message received")
@@ -246,15 +247,17 @@ fn publish_shard_state(
 fn handle_player_input(
     state: &mut BrokerState,
     connection_data: ConnectionData,
-    input: [u8; 16]
+    packet: ClientInputBrokerPacket,
 ){
-    println!("Player input: {:?}", input);
+    let inputs = packet.inputs;
 
     let Some(client_id) = state.connection_to_client.get(&connection_data) else {return;};
 
     let mut tree_entities = TopicTree::new_empty("entities".to_string());
     let mut tree_input = TopicTree::new_empty("input".to_string());
-    tree_input.add_leaf(client_id.to_string(),input.to_vec());
+    let mut bytes = BytesMut::new();;
+    let _ = inputs.serialize(&mut bytes);
+    tree_input.add_leaf(client_id.to_string(),bytes.to_vec());
     tree_entities.add_tree(tree_input);
 
     /* Code pour tester le hash et récupérer la donnée

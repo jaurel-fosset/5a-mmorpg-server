@@ -9,6 +9,7 @@ pub mod net;
 #[cfg(test)]
 mod tests;
 pub mod packet;
+pub mod input;
 
 pub trait Serializable
 {

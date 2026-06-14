@@ -1,5 +1,6 @@
 use bytes::{Bytes, BytesMut};
 use crate::{Deserializable, Serializable, SerializationError};
+use crate::input::InputData;
 use crate::packets::topic::TopicTree;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -78,18 +79,18 @@ impl Deserializable for BroadcastPacket {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClientInputBrokerPacket {
-    pub input: [u8; 16],
+    pub inputs: [InputData; 16],
 }
 impl Serializable for ClientInputBrokerPacket {
     fn serialize(self, bytes: &mut BytesMut) -> Result<(), SerializationError> {
-        self.input.serialize(bytes)?;
+        self.inputs.serialize(bytes)?;
         Ok(())
     }
 }
 impl Deserializable for ClientInputBrokerPacket {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError> {
-        let input = <[u8; 16]>::deserialize(bytes)?;
-        Ok(Self { input, })
+        let input = <[InputData; 16]>::deserialize(bytes)?;
+        Ok(Self { inputs: input, })
     }
 }
 

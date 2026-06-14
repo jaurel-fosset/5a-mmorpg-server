@@ -1,8 +1,8 @@
-use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 use bevy::prelude::*;
 use bevy_egui::egui::{Align2, Context};
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
+use circular_buffer::CircularBuffer;
 use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream, GameStreamReliability};
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::broker::{ClientHelloPacket, ClientInputBrokerPacket};
@@ -54,29 +54,21 @@ enum NetworkState {
 }
 
 
-use bitflags::bitflags;
-
-bitflags! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-    pub struct DirectionFlags: u8 {
-        const UP    = 0b0000_0001;
-        const DOWN  = 0b0000_0010;
-        const LEFT  = 0b0000_0100;
-        const RIGHT = 0b0000_1000;
-    }
-}
+use network_serialization::input::{DirectionFlags, InputData};
 
 #[derive(Resource)]
 pub struct PlayerInput {
-    pub history_input: VecDeque<u8>,
+    pub history_input: CircularBuffer<16,InputData>,
+    pub sequence: u32,
     pub network_timer: Timer,
 }
 
 impl Default for PlayerInput {
     fn default() -> Self {
         Self {
-            history_input: VecDeque::with_capacity(16),
-            network_timer: Timer::new(Duration::from_millis(16), TimerMode::Repeating)
+            history_input: Default::default(),
+            sequence: 0,
+            network_timer: Timer::new(Duration::from_millis(66), TimerMode::Repeating)
         }
     }
 }
@@ -203,10 +195,13 @@ fn handle_input_system(
     if keyboard.pressed(KeyCode::ArrowLeft) { inputs.insert(DirectionFlags::LEFT); }
     if keyboard.pressed(KeyCode::ArrowRight) { inputs.insert(DirectionFlags::RIGHT); }
 
-    player_input.history_input.push_back(inputs.bits());
-    if player_input.history_input.len() > 16 {
-        player_input.history_input.pop_front();
-    }
+    let sequence_id = player_input.sequence.clone();
+    player_input.history_input.push_back(
+        InputData {
+            sequence: sequence_id,
+            input: inputs,
+         });
+    player_input.sequence += 1;
 }
 
 fn send_inputs_to_network_system(
@@ -218,14 +213,14 @@ fn send_inputs_to_network_system(
     }
 
     let NetworkState::Connected{ connection, ref peer, ref stream } = *network_state else { return; };
-    let mut inputs: [u8; 16] = [0; 16];
-    for (i, &input_byte) in player_input.history_input.iter().enumerate() {
-        inputs[i] = input_byte;
+    let mut inputs: [InputData; 16] = Default::default();
+    for (i, input_byte) in player_input.history_input.iter().enumerate() {
+        inputs[i] = input_byte.clone();
     }
 
     let packet = PacketMessage::new(
         PacketData::ClientInputBroker(
-            ClientInputBrokerPacket{ input:inputs }
+            ClientInputBrokerPacket{ inputs, }
         )
     );
 
