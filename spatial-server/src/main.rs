@@ -4,15 +4,12 @@ use spatial_server::network_object::entity::{Entity, EntityId, EntityManager};
 use spatial_server::network_object::shard::{ShardId, ShardManager};
 use spatial_server::quad_tree::QuadTree;
 use std::collections::HashSet;
-use network_serialization::packets::broker::{SubscribePacket, UnsubscribePacket};
 use network_serialization::packets::topic::TopicTree;
-use network_serialization::packet::{PacketData, PacketMessage};
-use network_serialization::packets::Packet;
 
 const MAX_AUTHORITY_SWITCH_RANGE: f32 = 100.0;
 
 
-fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
+fn update_subscription(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
 {
     let entity_position = *entity.position();
 
@@ -27,21 +24,12 @@ fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: 
         let mut entities = TopicTree::new_empty("entities".to_string());
         entities.add_tree(positions);
 
-
-        let packet =
-        PacketMessage::new
-        (
-            PacketData::Subscribe
-            (
-                SubscribePacket
-                {
-                    client_id: 0, // TODO : get shard client id
-                    topic: entities,
-                }
-            )
-        ).write().unwrap();
-
-        network_manager.broker_send(packet).unwrap();
+        // TODO : get shard client id
+        match network_manager.subscribe(0, entities)
+        {
+            Ok(_) => (),
+            Err(_) => (),
+        }
     }
 
     for shard in removed_shard
@@ -52,23 +40,18 @@ fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: 
         let mut entities = TopicTree::new_empty("entities".to_string());
         entities.add_tree(positions);
 
-
-        let packet =
-        PacketMessage::new
-        (
-            PacketData::Unsubscribe
-                (
-                    UnsubscribePacket
-                    {
-                        client_id: 0, // TODO : get shard client id
-                        topic: entities,
-                    }
-                )
-        ).write().unwrap();
-
-        network_manager.broker_send(packet).unwrap();
+        // TODO : get shard client id
+        match network_manager.unsubscribe(0, entities)
+        {
+            Ok(_) => (),
+            Err(_) => (),
+        }
     }
+}
 
+fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
+{
+    let entity_position = *entity.position();
 
     let current_shard = match quad_tree.shard_for(entity_position)
     {
@@ -183,6 +166,7 @@ fn main()
 
                     for entity in entity_manager.entities()
                     {
+                        update_subscription(&mut network, &mut quad_tree, &mut shard_manager, entity);
                         handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, entity);
                     }
 
