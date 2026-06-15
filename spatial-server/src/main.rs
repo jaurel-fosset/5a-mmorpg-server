@@ -24,8 +24,7 @@ fn update_subscription(network_manager: &mut NetworkGlobalState, quad_tree: &mut
         let mut entities = TopicTree::new_empty("entities".to_string());
         entities.add_tree(positions);
 
-        // TODO : get shard client id
-        match network_manager.subscribe(0, entities)
+        match network_manager.subscribe(shard.id(), entities)
         {
             Ok(_) => (),
             Err(_) => (),
@@ -40,8 +39,8 @@ fn update_subscription(network_manager: &mut NetworkGlobalState, quad_tree: &mut
         let mut entities = TopicTree::new_empty("entities".to_string());
         entities.add_tree(positions);
 
-        // TODO : get shard client id
-        match network_manager.unsubscribe(0, entities)
+
+        match network_manager.unsubscribe(shard.id(), entities)
         {
             Ok(_) => (),
             Err(_) => (),
@@ -55,7 +54,10 @@ fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: 
 
     let current_shard = match quad_tree.shard_for(entity_position)
     {
-        Some(shard) => shard,
+        Some(shard) =>
+        {
+            shard_manager.resolve_id(shard).unwrap_or_else(|| shard)
+        },
         None =>
         {
             eprintln!("Error : an entity is out of bound. This is either because of a deleted\
@@ -106,25 +108,38 @@ fn main()
     let mut entity_manager = EntityManager::new();
 
     network.request_more_shards(1);
-    let mut quad_tree = loop
+    let mut quad_tree: QuadTree = loop
     {
         if let Some(event) = network.poll_once()
         {
             match event
             {
-                NetworkEvent::ShardCreation(addresses) =>
+                NetworkEvent::ShardsUpdate(created_shards, destroyed_shards) =>
+                {
+                    for shard in created_shards
                     {
-                        for ip in addresses.into_iter()
+                        shard_manager.on_receive_shard_creation(shard);
+                    }
+                    for shard in destroyed_shards
+                    {
+                        let mut lost_shard = 0;
+                        match shard_manager.on_receive_shard_deletion(shard)
                         {
-                            shard_manager.on_receive_shard_creation(ip);
+                            Ok(_) => (),
+                            Err(_) => lost_shard += 1,
                         }
 
-                        let id = shard_manager.new_shard(map_bounds)
-                            .unwrap();
-                        break QuadTree::new(map_bounds, id);
+                        network.request_more_shards(lost_shard)
                     }
+                }
                 _ => (),
             }
+        }
+
+        match shard_manager.new_shard(map_bounds)
+        {
+            Some(shard) => break QuadTree::new(map_bounds, shard),
+            None => continue,
         }
     };
 
@@ -134,20 +149,25 @@ fn main()
         {
             match event
             {
-                NetworkEvent::ShardCreation(adresses) =>
+                NetworkEvent::ShardsUpdate(created_shards, destroyed_shards) =>
                 {
-                    for ip in adresses.into_iter()
+                    for shard in created_shards
                     {
-                        shard_manager.on_receive_shard_creation(ip);
+                        shard_manager.on_receive_shard_creation(shard);
                     }
-                }
-                NetworkEvent::ShardDestruction(ip) =>
-                {
-                    let request_one_shard = shard_manager.on_receive_shard_deletion(ip);
-                    if request_one_shard
+                    for shard in destroyed_shards
                     {
-                        network.request_more_shards(1);
+                        let mut lost_shard = 0;
+                        match shard_manager.on_receive_shard_deletion(shard)
+                        {
+                            Ok(_) => (),
+                            Err(_) => lost_shard += 1,
+                        }
+
+                        network.request_more_shards(lost_shard)
                     }
+
+                    break;
                 }
                 NetworkEvent::PositionUpdate(entity_positions) =>
                 {

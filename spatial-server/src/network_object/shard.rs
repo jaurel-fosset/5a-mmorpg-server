@@ -1,7 +1,6 @@
 ﻿use crate::geometry::prelude as geo;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::net::Ipv6Addr;
 use std::time;
 use thiserror;
 
@@ -134,7 +133,7 @@ impl ShardManager
                 });
     }
 
-    pub fn on_receive_shard_creation(&mut self, shard_address: Ipv6Addr)
+    pub fn on_receive_shard_creation(&mut self, shard_address: u32)
     {
         let shard_id = ShardId::new(shard_address);
 
@@ -155,48 +154,43 @@ impl ShardManager
         }
     }
 
-    pub fn on_receive_shard_deletion(&mut self, deleted_shard: Ipv6Addr) -> bool
+    pub fn on_receive_shard_deletion(&mut self, deleted_shard: u32) -> Result<(), DeletedShardUnrecovered>
     {
         let deleted_shard = ShardId::new(deleted_shard);
 
-        match self.free_shards.remove(&deleted_shard)
+        if let Some(_) = self.free_shards.remove(&deleted_shard)
         {
-            Some(_) => return false,
-            None => (),
+            return Ok(());
         }
 
-        if self.deleted_in_use.contains_key(&deleted_shard)
+        if     self.deleted_in_use.contains_key(&deleted_shard)
             || self.replaced_shards.contains_key(&deleted_shard)
         {
             eprintln!("Error: Double deletion on network, ignoring");
-            return false;
+            return Ok(());
         }
 
         let shard = match self.shards.remove(&deleted_shard)
         {
             Some(shard) => shard,
-            None =>
-                {
-                    eprintln!("Error : deleted shard was not in any of our cache");
-                    return false;
-                }
+            None => return Ok(()),
         };
 
         eprintln!("Catastrophic error : shard in use was deleted");
         match self.new_shard(shard.authority_bound)
         {
             Some(new_shard) =>
-                {
-                    println!("We were able to recover using another shard");
-                    self.replaced_shards.insert(deleted_shard, new_shard);
-                    false
-                }
+            {
+                println!("We were able to recover using another shard");
+                self.replaced_shards.insert(deleted_shard, new_shard);
+                Ok(())
+            }
             None =>
-                {
-                    println!("Requesting another shard created");
-                    self.deleted_in_use.insert(deleted_shard, (time::Instant::now(), shard));
-                    false
-                }
+            {
+                println!("Requesting another shard created");
+                self.deleted_in_use.insert(deleted_shard, (time::Instant::now(), shard));
+                Err(DeletedShardUnrecovered)
+            }
         }
     }
 
@@ -210,6 +204,10 @@ impl ShardManager
         self.deleted_in_use.keys().copied().next()
     }
 }
+
+#[derive(thiserror::Error, Debug)]
+#[error("Unable to recover from the deletion")]
+pub struct DeletedShardUnrecovered;
 
 pub struct Shard
 {
@@ -237,16 +235,16 @@ impl Shard
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub struct ShardId(Ipv6Addr);
+pub struct ShardId(u32);
 
 impl ShardId
 {
-    fn new(ip: Ipv6Addr) -> Self
+    fn new(ip: u32) -> Self
     {
         ShardId(ip)
     }
 
-    pub fn ip(&self) -> Ipv6Addr { self.0 }
+    pub fn id(&self) -> u32 { self.0 }
 }
 
 impl Display for ShardId

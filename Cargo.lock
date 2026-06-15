@@ -5627,7 +5627,6 @@ dependencies = [
  "bytes",
  "game_sockets",
  "int-enum",
- "lazy_static",
  "network_serialization",
  "thiserror 2.0.18",
 ]
