@@ -118,7 +118,8 @@ impl Serializable for ClientHandshakePacket {
     }
 }
 impl Deserializable for ClientHandshakePacket {
-    fn deserialize(_bytes: &mut Bytes) -> Result<Self, SerializationError> {
-        Ok(Self {})
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError> {
+        let client_id = u32::deserialize(bytes)?;
+        Ok(Self {client_id})
     }
 }
