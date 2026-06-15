@@ -8,6 +8,7 @@ pub mod packets;
 pub mod net;
 #[cfg(test)]
 mod tests;
+pub mod packet;
 
 pub trait Serializable
 {
