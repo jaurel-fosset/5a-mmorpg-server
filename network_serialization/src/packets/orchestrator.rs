@@ -8,6 +8,7 @@ pub struct OrchestratorHelloPacket
 {
     pub orchestrator: Ipv6Addr,
     pub redis_dns: Ipv6Addr,
+    pub broker: Ipv6Addr,
 }
 
 impl Serializable for OrchestratorHelloPacket
@@ -16,6 +17,7 @@ impl Serializable for OrchestratorHelloPacket
     {
         self.orchestrator.serialize(stream)?;
         self.redis_dns.serialize(stream)?;
+        self.broker.serialize(stream)?;
 
         Ok(())
     }
@@ -29,7 +31,8 @@ impl Deserializable for OrchestratorHelloPacket
     {
         let orchestrator = Ipv6Addr::deserialize(bytes)?;
         let redis_dns = Ipv6Addr::deserialize(bytes)?;
+        let broker = Ipv6Addr::deserialize(bytes)?;
 
-        Ok(Self { orchestrator, redis_dns })
+        Ok(Self { orchestrator, redis_dns, broker })
     }
 }

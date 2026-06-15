@@ -5,8 +5,8 @@ use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream};
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::broker::{BroadcastPacket, ClientHandshakePacket, ClientInputBrokerPacket, PublishPacket};
 use network_serialization::packets::Packet;
-use network_serialization::packets::topic::{TopicTree, TopicTreeType};
 use network_serialization::Serializable;
+use network_serialization::packets::topic::{TopicLeaf, TopicNode, TopicTree, TopicTreeType};
 
 #[derive(Clone, Hash, Eq, PartialEq, Default)]
 struct ConnectionData {

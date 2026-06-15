@@ -1,6 +1,8 @@
-﻿use std::net::Ipv6Addr;
+use std::net::Ipv6Addr;
 use bytes::{Bytes, BytesMut};
 use crate::*;
+use bytes::{Bytes, BytesMut};
+use std::net::Ipv6Addr;
 
 #[derive(Debug)]
 pub struct AllocateShardsPacket
@@ -88,7 +90,7 @@ impl Deserializable for ShardCreationPacket
 #[derive(Debug)]
 pub struct ShardDestructionPacket
 {
-    shard: Ipv6Addr,
+    pub shard: Ipv6Addr,
 }
 
 impl Serializable for ShardDestructionPacket
@@ -113,14 +115,14 @@ impl Deserializable for ShardDestructionPacket
 #[derive(Debug)]
 pub struct AuthoritySwitchPacket
 {
-    old_shard: Ipv6Addr,
-    new_shard: Ipv6Addr,
-    client: Ipv6Addr
+    old_shard: u32,
+    new_shard: u32,
+    client: u32,
 }
 
 impl AuthoritySwitchPacket
 {
-    pub fn new(old_shard: Ipv6Addr, new_shard: Ipv6Addr, client: Ipv6Addr) -> Self
+    pub fn new(old_shard: u32, new_shard: u32, client: u32) -> Self
     {
         Self { old_shard, new_shard, client }
     }
@@ -142,11 +144,11 @@ impl Deserializable for AuthoritySwitchPacket
 {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
     where
-        Self: Sized
+        Self: Sized,
     {
-        let old_shard = Ipv6Addr::deserialize(bytes)?;
-        let new_shard = Ipv6Addr::deserialize(bytes)?;
-        let client = Ipv6Addr::deserialize(bytes)?;
+        let old_shard = u32::deserialize(bytes)?;
+        let new_shard = u32::deserialize(bytes)?;
+        let client = u32::deserialize(bytes)?;
 
         Ok(Self { old_shard, new_shard, client })
     }
