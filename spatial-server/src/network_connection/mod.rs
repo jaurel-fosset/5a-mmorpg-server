@@ -90,7 +90,7 @@ impl NetworkGlobalState
                     PacketData::OrchestratorHello(data) =>
                     {
                         self.redis_ip = Some(data.redis_dns);
-                        self.broker = Some(BrokerSocket::new(data.broker, 3000)?);
+                        self.broker = Some(BrokerSocket::new(data.broker)?);
                     }
                     _ => (),
                 }
@@ -183,7 +183,7 @@ impl NetworkGlobalState
     }
 }
 
-const ORCHESTRATOR_PORT: u16 = 4000;
+const ORCHESTRATOR_PORT: u16 = 50_000;
 
 struct OrchestratorConnection
 {
@@ -198,7 +198,7 @@ impl OrchestratorConnection
     {
         let backend = gs::protocols::QuicBackend::new();
         let socket = gs::GamePeer::new(backend);
-        socket.connect("0.0.0.0", ORCHESTRATOR_PORT)
+        socket.listen("0.0.0.0", ORCHESTRATOR_PORT)
             .unwrap();
 
         Self
@@ -274,6 +274,8 @@ impl OrchestratorConnection
     }
 }
 
+const BROKER_PORT: u16 = 10_001;
+
 struct BrokerSocket
 {
     socket: gs::GamePeer,
@@ -283,11 +285,11 @@ struct BrokerSocket
 
 impl BrokerSocket
 {
-    pub fn new(address: net::Ipv6Addr, port: u16) -> Option<BrokerSocket>
+    pub fn new(address: net::Ipv6Addr) -> Option<BrokerSocket>
     {
         let backend = gs::protocols::QuicBackend::new();
         let socket = gs::GamePeer::new(backend);
-        socket.connect(address.to_string().as_str(), port).ok()?;
+        socket.connect(address.to_string().as_str(), BROKER_PORT).ok()?;
 
         Some(Self
         {
