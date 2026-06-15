@@ -108,7 +108,13 @@ fn register_client(
     let new_client_id = state.next_client_id.clone();
     register_connection(state, connection_data.clone());
     
-    let packet = PacketMessage::new(PacketData::ClientHandshake(ClientHandshakePacket {}));
+    let packet = PacketMessage::new(
+        PacketData::ClientHandshake(
+            ClientHandshakePacket {
+                client_id: new_client_id
+            }
+        )
+    );
     state.game_peer.send(&connection_data.connection, &connection_data.stream, packet.write().unwrap()).unwrap();
 
     // todo : send data to shard

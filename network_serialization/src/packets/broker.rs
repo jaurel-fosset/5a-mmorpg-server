@@ -108,9 +108,12 @@ impl Deserializable for ClientHelloPacket {
 }
 
 #[derive(Debug)]
-pub struct ClientHandshakePacket {}
+pub struct ClientHandshakePacket {
+    pub client_id: u32,
+}
 impl Serializable for ClientHandshakePacket {
-    fn serialize(self, _bytes: &mut BytesMut) -> Result<(), SerializationError> {
+    fn serialize(self, bytes: &mut BytesMut) -> Result<(), SerializationError> {
+        self.client_id.serialize(bytes)?;
         Ok(())
     }
 }
