@@ -47,6 +47,13 @@ services:
       context: .
       dockerfile: game_server/Dockerfile
 
+  spatial-server:
+    build:
+      context: .
+      dockerfile: spatial-server/Dockerfile
+    ports:
+      - "50000:50000/udp"
+
 volumes:
   redis-data:
     driver: local
