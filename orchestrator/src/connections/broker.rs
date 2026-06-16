@@ -1,6 +1,8 @@
 ﻿use std::collections::HashMap;
+use std::net::Ipv4Addr;
+use std::str::FromStr;
 use bollard::config::{ContainerCreateBody, HostConfig};
-use bollard::query_parameters::CreateContainerOptions;
+use bollard::query_parameters::{CreateContainerOptions, StartContainerOptions};
 use game_sockets as gs;
 use crate::connections::{get_docker_ip, init_connection};
 use tokio::sync;
@@ -31,15 +33,17 @@ pub enum Commands
 
 pub struct BrokerTask
 {
-    address: String,
+    address: Ipv4Addr,
     port: u16,
+    orchestrator_ip: Ipv4Addr,
+    redis_dns_ip: Ipv4Addr,
     command_receiver: sync::mpsc::Receiver<Commands>,
     command_sender: sync::mpsc::Sender<Commands>,
 }
 
 impl BrokerTask
 {
-    pub async fn new(docker: &mut bollard::Docker) -> Self
+    pub async fn new(docker: &mut bollard::Docker, orchestrator_ip: Ipv4Addr, redis_dns_ip: Ipv4Addr) -> Self
     {
         const BROKER_PORT: u16 = 10_001;
 
@@ -78,6 +82,11 @@ impl BrokerTask
             config,
         ).await.unwrap();
 
+        docker.start_container
+        (
+            &container_name,
+            None::<StartContainerOptions>,
+        ).await.unwrap();
         
         let ip = get_docker_ip(docker, &response.id).await;
 
@@ -89,6 +98,8 @@ impl BrokerTask
         {
             address: ip,
             port: BROKER_PORT,
+            orchestrator_ip,
+            redis_dns_ip,
             command_receiver: event_receiver,
             command_sender: event_sender,
         }
@@ -98,10 +109,12 @@ impl BrokerTask
     {
         self.command_sender.clone()
     }
+    pub fn get_broker_ip(&self) -> Ipv4Addr { self.address }
 
     pub async fn run(mut self)
     {
-        let (socket, connection, stream) = init_connection(&self.address, self.port).await;
+        let (socket, connection, stream) = init_connection(
+            self.address, self.port, self.orchestrator_ip, self.redis_dns_ip, self.address).await;
 
         while let Some(event) = self.command_receiver.recv().await
         {

@@ -1,6 +1,8 @@
 ﻿use std::collections::HashMap;
+use std::net::Ipv4Addr;
+use std::str::FromStr;
 use bollard::config::{ContainerCreateBody, HostConfig};
-use bollard::query_parameters::CreateContainerOptions;
+use bollard::query_parameters::{CreateContainerOptions, StartContainerOptions};
 use tokio::{sync, task};
 use log::error;
 use game_sockets::GameNetworkEvent;
@@ -19,15 +21,18 @@ pub enum Events
 
 pub struct SpatialTask
 {
-    address: String,
+    address: Ipv4Addr,
     port: u16,
+    orchestrator_ip: Ipv4Addr,
+    redis_dns_ip: Ipv4Addr,
+    broker_ip: Ipv4Addr,
     event_receiver: sync::broadcast::Receiver<Events>,
     event_sender: sync::broadcast::Sender<Events>,
 }
 
 impl SpatialTask
 {
-    pub async fn new(docker: &mut bollard::Docker) -> SpatialTask
+    pub async fn new(docker: &mut bollard::Docker, orchestrator_ip: Ipv4Addr, redis_dns_ip: Ipv4Addr, broker_ip: Ipv4Addr) -> SpatialTask
     {
         let container_name = "spatial-service";
 
@@ -77,6 +82,12 @@ impl SpatialTask
             config,
         ).await.unwrap();
 
+        docker.start_container
+        (
+            &container_name,
+            None::<StartContainerOptions>,
+        ).await.unwrap();
+
         let ip = get_docker_ip(docker, &response.id).await;
         let (event_sender, event_receiver) = sync::broadcast::channel(EVENTS_BUFFER_SIZE);
 
@@ -84,6 +95,9 @@ impl SpatialTask
         {
             address: ip,
             port: ORCHESTRATOR_PORT,
+            orchestrator_ip,
+            redis_dns_ip,
+            broker_ip,
             event_receiver,
             event_sender,
         }
@@ -96,7 +110,8 @@ impl SpatialTask
 
     pub async fn run(self)
     {
-        let (mut socket, spatial_connection, spatial_stream) = init_connection(&self.address, self.port).await;
+        let (mut socket, spatial_connection, spatial_stream) =
+            init_connection(self.address, self.port, self.orchestrator_ip, self.redis_dns_ip, self.broker_ip).await;
 
         // TODO : add to redis
 

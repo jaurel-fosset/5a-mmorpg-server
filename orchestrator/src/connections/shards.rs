@@ -1,4 +1,5 @@
 ﻿use std::collections::HashMap;
+use std::net::Ipv4Addr;
 use bollard::config::{ContainerCreateBody, HostConfig};
 use bollard::Docker;
 use bollard::query_parameters::{CreateContainerOptions, StartContainerOptions};
@@ -15,18 +16,27 @@ pub struct ShardsTask
 {
     broker_commands: sync::mpsc::Sender<broker::Commands>,
     spatial_events: sync::broadcast::Receiver<spatial::Events>,
+    orchestrator_ip: Ipv4Addr,
+    redis_dns_ip: Ipv4Addr,
+    broker_ip: Ipv4Addr,
     next_id: u32,
 }
 
 impl ShardsTask
 {
     pub async fn new(broker_commands: sync::mpsc::Sender<broker::Commands>,
-                     spatial_events: sync::broadcast::Receiver<spatial::Events>) -> Self
+                     spatial_events: sync::broadcast::Receiver<spatial::Events>,
+                     orchestrator_ip: Ipv4Addr,
+                     redis_dns_ip: Ipv4Addr,
+                     broker_ip: Ipv4Addr) -> Self
     {
         Self
         {
             broker_commands,
             spatial_events,
+            orchestrator_ip,
+            redis_dns_ip,
+            broker_ip,
             next_id: 1000,
         }
     }
@@ -81,14 +91,14 @@ impl ShardsTask
                 }
             };
 
-            init_connection(&ip, port).await;
+            init_connection(ip, port, self.orchestrator_ip, self.redis_dns_ip, self.broker_ip).await;
 
             // TODO : add to redis
             _ = self.broker_commands.send(broker::Commands::ServerCreation(id, broker::ServerType::Shard)).await;
         }
     }
 
-    async fn spawn_single_shard(&mut self, docker: &mut Docker) -> Result<(String, u16, u32), SpawnShardError>
+    async fn spawn_single_shard(&mut self, docker: &mut Docker) -> Result<(Ipv4Addr, u16, u32), SpawnShardError>
     {
         let shard_id = self.next_id();
         let container_name = format!("shard-{}", shard_id);
