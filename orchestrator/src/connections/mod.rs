@@ -1,5 +1,6 @@
 ﻿pub mod broker;
 pub mod spatial;
+pub mod shards;
 
 use std::time::Duration;
 use bollard::Docker;
