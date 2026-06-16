@@ -1,5 +1,7 @@
 mod heartbeat;
 mod scaler;
+pub mod startup;
+pub mod connections;
 
 use redis::aio::MultiplexedConnection;
 use std::env;
@@ -12,7 +14,8 @@ struct AppState {
 
 #[dotenvy::load(path = ".env", required = false)]
 #[tokio::main]
-async fn main() {
+async fn main()
+{
     println!("Hello, world!");
 
     let client = redis::Client::open(env::var("REDIS_URL").unwrap()).unwrap();
