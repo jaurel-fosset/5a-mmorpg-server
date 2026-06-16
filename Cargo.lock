@@ -4550,6 +4550,7 @@ dependencies = [
  "log",
  "network_serialization",
  "redis",
+ "thiserror 2.0.18",
  "tokio",
 ]
 
