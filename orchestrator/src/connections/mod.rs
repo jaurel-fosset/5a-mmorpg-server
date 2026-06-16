@@ -4,8 +4,10 @@ pub mod spatial;
 use std::time::Duration;
 use bollard::Docker;
 use game_sockets as gs;
+use network_serialization::packet::{PacketData, PacketMessage};
+use network_serialization::packets::orchestrator::OrchestratorHelloPacket;
 
-async fn init_connection(ip: String, port: u16) -> (gs::GamePeer, gs::GameConnection, gs::GameStream)
+async fn init_connection(ip: &str, port: u16) -> (gs::GamePeer, gs::GameConnection, gs::GameStream)
 {
     let mut socket =
     {

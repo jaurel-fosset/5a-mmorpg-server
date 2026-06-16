@@ -97,9 +97,9 @@ impl BrokerTask
         self.command_sender.clone()
     }
 
-    async fn run(mut self)
+    pub async fn run(mut self)
     {
-        let (socket, connection, stream) = init_connection(self.address, self.port).await;
+        let (socket, connection, stream) = init_connection(&self.address, self.port).await;
 
         while let Some(event) = self.command_receiver.recv().await
         {
