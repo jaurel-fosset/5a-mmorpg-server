@@ -1,6 +1,8 @@
 ﻿use std::cmp::PartialEq;
 use std::net;
+use std::net::Ipv4Addr;
 use std::str::FromStr;
+use std::time::Duration;
 use game_sockets as gs;
 use network_serialization::Deserializable;
 use network_serialization::packet::{PacketData, PacketMessage};
@@ -21,7 +23,7 @@ pub enum NetworkEvent
 pub struct NetworkGlobalState
 {
     orchestrator: OrchestratorConnection,
-    redis_ip: Option<net::Ipv6Addr>,
+    redis_ip: Option<net::Ipv4Addr>,
     broker: Option<BrokerSocket>,
 }
 
@@ -90,7 +92,7 @@ impl NetworkGlobalState
                     PacketData::OrchestratorHello(data) =>
                     {
                         self.redis_ip = Some(data.redis_dns);
-                        self.broker = Some(BrokerSocket::new(data.broker, 3000)?);
+                        self.broker = Some(BrokerSocket::new(data.broker, 10001)?);
                     }
                     _ => (),
                 }
@@ -155,35 +157,37 @@ impl NetworkGlobalState
 
     fn parse_broadcast(&self, packet: BroadcastPacket) -> Option<NetworkEvent>
     {
-        if packet.topic.name == "orchestrator"
-        {
-            let (created_shards, destroyed_shards) = server_allocation_broadcast(packet);
-            let created_shards = created_shards.map(|shards| { shards.collect::<Vec<_>>() });
-            let destroyed_shards = destroyed_shards.map(|shards| { shards.collect::<Vec<_>>() });
+        for tree in packet.data {
+            if tree.name == "orchestrator"
+            {
+                let (created_shards, destroyed_shards) = server_allocation_broadcast(tree);
+                let created_shards = created_shards.map(|shards| { shards.collect::<Vec<_>>() });
+                let destroyed_shards = destroyed_shards.map(|shards| { shards.collect::<Vec<_>>() });
 
-            if created_shards.is_none() && destroyed_shards.is_none() { return None; }
+                if created_shards.is_none() && destroyed_shards.is_none() { return None; }
 
-            let created_shards = created_shards.unwrap_or(Vec::new());
-            let destroyed_shards = destroyed_shards.unwrap_or(Vec::new());
-            Some(NetworkEvent::ShardsUpdate(created_shards, destroyed_shards))
-        }
-        else if packet.topic.name == "entities"
-        {
-            let positions = position_update_broadcast(packet)
-                .map(|positions| positions.collect())
-                .unwrap_or(Vec::new());
+                let created_shards = created_shards.unwrap_or(Vec::new());
+                let destroyed_shards = destroyed_shards.unwrap_or(Vec::new());
+                return Some(NetworkEvent::ShardsUpdate(created_shards, destroyed_shards))
+            }
+            else if tree.name == "entities"
+            {
+                let positions = position_update_broadcast(tree)
+                    .map(|positions| positions.collect())
+                    .unwrap_or(Vec::new());
 
-            Some(NetworkEvent::PositionUpdate(positions))
+                return Some(NetworkEvent::PositionUpdate(positions))
+            }
+            else
+            {
+                eprintln!("[Network] Received unexpected broadcast packet {}", tree.name);
+            }
         }
-        else
-        {
-            eprintln!("[Network] Received unexpected broadcast packet {}", packet.topic.name);
-            None
-        }
+        None
     }
 }
 
-const ORCHESTRATOR_PORT: u16 = 4000;
+const ORCHESTRATOR_PORT: u16 = 9000;
 
 struct OrchestratorConnection
 {
@@ -283,7 +287,7 @@ struct BrokerSocket
 
 impl BrokerSocket
 {
-    pub fn new(address: net::Ipv6Addr, port: u16) -> Option<BrokerSocket>
+    pub fn new(address: Ipv4Addr, port: u16) -> Option<BrokerSocket>
     {
         let backend = gs::protocols::QuicBackend::new();
         let socket = gs::GamePeer::new(backend);
@@ -368,9 +372,9 @@ pub enum NetworkError
     ConnectionPartiallyInitialised,
 }
 
-fn server_allocation_broadcast(packet: BroadcastPacket) -> (Option<impl Iterator<Item=u32>>, Option<impl Iterator<Item=u32>>)
+fn server_allocation_broadcast(tree: TopicTree) -> (Option<impl Iterator<Item=u32>>, Option<impl Iterator<Item=u32>>)
 {
-    let creations = packet.topic
+    let creations = tree
         .get_sub_tree("server_creations")
         .and_then(|creations|
             {
@@ -385,7 +389,7 @@ fn server_allocation_broadcast(packet: BroadcastPacket) -> (Option<impl Iterator
                 }
             });
 
-    let deletions = packet.topic
+    let deletions = tree
         .get_sub_tree("server_deletions")
         .and_then(|deletions|
         {
@@ -451,9 +455,9 @@ fn broadcast_extract_shard<T>(data: T) -> impl Iterator<Item=u32>
 }
 
 
-fn position_update_broadcast(packet: BroadcastPacket) -> Option<impl Iterator<Item=(u32, f32, f32)>>
+fn position_update_broadcast(tree: TopicTree) -> Option<impl Iterator<Item=(u32, f32, f32)>>
 {
-    let positions = match packet.topic.get_sub_tree("positions")
+    let positions = match tree.get_sub_tree("positions")
     {
         Some(positions) => positions,
         None =>

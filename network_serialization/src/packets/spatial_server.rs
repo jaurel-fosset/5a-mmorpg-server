@@ -1,13 +1,11 @@
 use std::net::Ipv6Addr;
 use bytes::{Bytes, BytesMut};
 use crate::*;
-use bytes::{Bytes, BytesMut};
-use std::net::Ipv6Addr;
 
 #[derive(Debug)]
 pub struct AllocateShardsPacket
 {
-    shard_count: u64,
+    pub shard_count: u64,
 }
 
 impl AllocateShardsPacket

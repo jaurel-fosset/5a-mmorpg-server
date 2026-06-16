@@ -1,5 +1,6 @@
 mod heartbeat;
 mod scaler;
+mod listener;
 
 use redis::aio::MultiplexedConnection;
 use std::env;
@@ -31,8 +32,10 @@ async fn main() {
     });
 
     let value = shared_state.clone();
-    let _t1 = tokio::spawn(async move { heartbeat::listen(value.clone()).await });
-    let _t2 = tokio::spawn(async move { scaler::run(shared_state).await });
+    //let _t1 = tokio::spawn(async move { heartbeat::listen(value.clone()).await });
+    //let _t2 = tokio::spawn(async move { scaler::run(shared_state).await });
+    let _t3 = tokio::spawn(async move { listener::listen(shared_state).await });
 
-    tokio::join!(_t1, _t2);
+    //tokio::join!(_t1, _t2);
+    tokio::join!(_t3);
 }

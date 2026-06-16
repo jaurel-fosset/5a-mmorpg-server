@@ -1,4 +1,4 @@
-﻿use std::net::Ipv6Addr;
+﻿use std::net::{Ipv4Addr, Ipv6Addr};
 use bytes::{Bytes, BytesMut};
 use crate::packets::Packet;
 use crate::*;
@@ -6,9 +6,9 @@ use crate::*;
 #[derive(Debug)]
 pub struct OrchestratorHelloPacket
 {
-    pub orchestrator: Ipv6Addr,
-    pub redis_dns: Ipv6Addr,
-    pub broker: Ipv6Addr,
+    pub orchestrator: Ipv4Addr,
+    pub redis_dns: Ipv4Addr,
+    pub broker: Ipv4Addr,
 }
 
 impl Serializable for OrchestratorHelloPacket
@@ -29,9 +29,9 @@ impl Deserializable for OrchestratorHelloPacket
     where
         Self: Sized
     {
-        let orchestrator = Ipv6Addr::deserialize(bytes)?;
-        let redis_dns = Ipv6Addr::deserialize(bytes)?;
-        let broker = Ipv6Addr::deserialize(bytes)?;
+        let orchestrator = Ipv4Addr::deserialize(bytes)?;
+        let redis_dns = Ipv4Addr::deserialize(bytes)?;
+        let broker = Ipv4Addr::deserialize(bytes)?;
 
         Ok(Self { orchestrator, redis_dns, broker })
     }
