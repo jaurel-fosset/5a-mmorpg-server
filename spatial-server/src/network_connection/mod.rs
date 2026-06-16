@@ -5,6 +5,7 @@ use game_sockets as gs;
 use network_serialization::Deserializable;
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::broker::{BroadcastPacket, SubscribePacket, UnsubscribePacket};
+use network_serialization::packets::game_server::HeartbeatPacket;
 use network_serialization::packets::Packet;
 use network_serialization::packets::spatial_server::*;
 use network_serialization::packets::topic::{TopicTree, TopicTreeType};
@@ -37,10 +38,25 @@ impl NetworkGlobalState
         }
     }
 
-    fn broker_send(&self, bytes: bytes::Bytes) -> Result<(), NetworkError>
+    pub fn send_heartbeat(&self) -> Result<(), NetworkError>
     {
-        let broker = self.broker.as_ref().ok_or(NetworkError::ConnectionPartiallyInitialised)?;
-        broker.send(bytes)
+        let packet = PacketMessage::new
+        (
+            PacketData::Heartbeat
+            (
+                HeartbeatPacket
+                {
+                    ip: net::Ipv4Addr::new(127, 0, 0, 1),
+                    port: ORCHESTRATOR_PORT,
+                    player_number: 0,
+                    player_capacity: 0,
+                    cpu_load: 0,
+                    ram_load: 0,
+                }
+            )
+        ).write().unwrap();
+
+        self.orchestrator.send(packet)
     }
 
     pub fn subscribe(&self, id: u32, topic: TopicTree) -> Result<(), NetworkError>
@@ -180,6 +196,12 @@ impl NetworkGlobalState
             eprintln!("[Network] Received unexpected broadcast packet {}", packet.topic.name);
             None
         }
+    }
+
+    fn broker_send(&self, bytes: bytes::Bytes) -> Result<(), NetworkError>
+    {
+        let broker = self.broker.as_ref().ok_or(NetworkError::ConnectionPartiallyInitialised)?;
+        broker.send(bytes)
     }
 }
 

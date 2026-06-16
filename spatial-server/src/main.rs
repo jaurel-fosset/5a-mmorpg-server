@@ -197,5 +197,7 @@ fn main()
                 }
             }
         }
+
+        _ = network.send_heartbeat();
     }
 }
