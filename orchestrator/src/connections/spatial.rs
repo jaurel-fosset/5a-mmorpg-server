@@ -37,7 +37,7 @@ impl SpatialTask
         let container_name = "spatial-service";
 
         const ORCHESTRATOR_PORT: u16 = 50_000;
-        const BROKER_PORT: u16 = 10_001;
+        const BROKER_PORT: u16 = 10_003;
 
         let config = ContainerCreateBody
         {
