@@ -1,6 +1,8 @@
 ﻿pub mod broker;
+pub mod spatial;
 
 use std::time::Duration;
+use bollard::Docker;
 use game_sockets as gs;
 
 async fn init_connection(ip: String, port: u16) -> (gs::GamePeer, gs::GameConnection, gs::GameStream)
@@ -11,7 +13,7 @@ async fn init_connection(ip: String, port: u16) -> (gs::GamePeer, gs::GameConnec
         gs::GamePeer::new(backend)
     };
 
-    socket.connect(&ip, port).unwrap();
+    socket.connect(ip, port).unwrap();
 
     let connection = loop
     {
@@ -32,5 +34,28 @@ async fn init_connection(ip: String, port: u16) -> (gs::GamePeer, gs::GameConnec
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
 
+    // TODO : Send hello packet
+    // let hello_packet = PacketMessage::new(
+    //     PacketData::OrchestratorHello(
+    //         OrchestratorHelloPacket
+    //         {
+    //             orchestrator: (),
+    //             redis_dns: (),
+    //             broker: (),
+    //         }
+    //     )
+    // );
+
     (socket, connection, stream)
+}
+
+async fn get_docker_ip(docker: &mut Docker, id: &str) -> String
+{
+    let inspect = docker.inspect_container(id, None).await.unwrap();
+
+    inspect
+        .network_settings.unwrap()
+        .networks.unwrap()
+        .get("mmorpg-server_default").unwrap()
+        .ip_address.clone().unwrap()
 }

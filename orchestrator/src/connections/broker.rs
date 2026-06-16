@@ -2,7 +2,7 @@
 use bollard::config::{ContainerCreateBody, HostConfig};
 use bollard::query_parameters::CreateContainerOptions;
 use game_sockets as gs;
-use crate::connections::init_connection;
+use crate::connections::{get_docker_ip, init_connection};
 use tokio::sync;
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::broker::BroadcastPacket;
@@ -78,13 +78,8 @@ impl BrokerTask
             config,
         ).await.unwrap();
 
-        let inspect = docker.inspect_container(&response.id, None).await.unwrap();
-
-        let ip = inspect
-            .network_settings.unwrap()
-            .networks.unwrap()
-            .get("mmorpg-server_default").unwrap()
-            .ip_address.clone().unwrap();
+        
+        let ip = get_docker_ip(docker, &response.id).await;
 
         let (event_sender, event_receiver) = sync::mpsc::channel(EVENTS_BUFFER_SIZE);
 
