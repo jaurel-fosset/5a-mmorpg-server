@@ -11,3 +11,5 @@ dotenvy = { workspace = true }
 network_serialization = { path = "../network_serialization" }
 bollard = "0.21.0"
 game_sockets = { path = "../game_sockets" }
+int-enum = { workspace = true }
+log = "0.4.32"

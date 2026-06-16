@@ -4546,6 +4546,8 @@ dependencies = [
  "bytes",
  "dotenvy",
  "game_sockets",
+ "int-enum",
+ "log",
  "network_serialization",
  "redis",
  "tokio",
