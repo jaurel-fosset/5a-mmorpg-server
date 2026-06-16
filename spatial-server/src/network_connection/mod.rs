@@ -22,7 +22,7 @@ pub enum NetworkEvent
 pub struct NetworkGlobalState
 {
     orchestrator: OrchestratorConnection,
-    redis_ip: Option<net::Ipv6Addr>,
+    redis_ip: Option<net::Ipv4Addr>,
     broker: Option<BrokerSocket>,
 }
 
@@ -307,7 +307,7 @@ struct BrokerSocket
 
 impl BrokerSocket
 {
-    pub fn new(address: net::Ipv6Addr) -> Option<BrokerSocket>
+    pub fn new(address: net::Ipv4Addr) -> Option<BrokerSocket>
     {
         let backend = gs::protocols::QuicBackend::new();
         let socket = gs::GamePeer::new(backend);
