@@ -41,7 +41,7 @@ impl SpatialTask
 
         let config = ContainerCreateBody
         {
-            image: Some(String::from("spatial")),
+            image: Some(String::from("spatial-server")),
             host_config: Some(HostConfig
             {
                 port_bindings: Some(
