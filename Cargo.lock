@@ -4058,6 +4058,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytes",
+ "int-enum",
  "ordered-float",
  "rand 0.10.1",
  "thiserror 2.0.18",

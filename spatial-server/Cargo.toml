@@ -8,4 +8,4 @@ thiserror = {workspace = true}
 network_serialization = { path = "../network_serialization"}
 game_sockets = { path = "../game_sockets" }
 bytes = "1.11.1"
-int-enum = "1.2.0"
+int-enum = { workspace = true }
