@@ -17,7 +17,7 @@ pub enum Events
     ShardCreationRequest(u64),
 }
 
-struct SpatialTask
+pub struct SpatialTask
 {
     address: String,
     port: u16,
@@ -27,7 +27,7 @@ struct SpatialTask
 
 impl SpatialTask
 {
-    async fn new(docker: &mut bollard::Docker) -> SpatialTask
+    pub async fn new(docker: &mut bollard::Docker) -> SpatialTask
     {
         let container_name = "spatial-service";
 
@@ -97,6 +97,8 @@ impl SpatialTask
     pub async fn run(self)
     {
         let (mut socket, spatial_connection, spatial_stream) = init_connection(&self.address, self.port).await;
+
+        // TODO : add to redis
 
         loop
         {

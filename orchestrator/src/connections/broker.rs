@@ -14,7 +14,7 @@ const EVENTS_BUFFER_SIZE: usize = 20;
 
 #[repr(u8)]
 #[derive(int_enum::IntEnum, Debug, Eq, PartialEq)]
-enum ServerType
+pub enum ServerType
 {
     Orchestrator = 0,
     Broker,
@@ -29,7 +29,7 @@ pub enum Commands
 }
 
 
-struct BrokerTask
+pub struct BrokerTask
 {
     address: String,
     port: u16,
@@ -83,6 +83,8 @@ impl BrokerTask
 
         let (event_sender, event_receiver) = sync::mpsc::channel(EVENTS_BUFFER_SIZE);
 
+        // TODO : add to redis
+
         Self
         {
             address: ip,
@@ -92,7 +94,7 @@ impl BrokerTask
         }
     }
 
-    fn get_command_channel_handle(&self) -> sync::mpsc::Sender<Commands>
+    pub fn get_command_channel_handle(&self) -> sync::mpsc::Sender<Commands>
     {
         self.command_sender.clone()
     }
