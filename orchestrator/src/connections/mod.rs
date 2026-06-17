@@ -20,6 +20,7 @@ async fn init_connection(ip: Ipv4Addr, port: u16, orchestrator_ip: Ipv4Addr, red
         gs::GamePeer::new(backend)
     };
 
+    println!("Connecting to {}:{}", ip, port);
     socket.connect(&ip.to_string(), port).unwrap();
 
     let connection = loop

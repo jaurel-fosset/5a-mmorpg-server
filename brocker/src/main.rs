@@ -44,7 +44,7 @@ async fn main() {
     let backend = game_sockets::protocols::QuicBackend::new();
     let peer = game_sockets::GamePeer::new(backend);
 
-    peer.listen("127.0.0.1",10001).unwrap();
+    peer.listen("0.0.0.0",10001).unwrap();
     let mut broker = BrokerState::new(peer);
 
     loop {
@@ -62,7 +62,7 @@ async fn main() {
                     PacketData::ClientInputBroker(packet) => handle_player_input(&mut broker, connection_data, packet),
                     PacketData::ClientHello(packet) => register_client(&mut broker, connection_data),
 
-                    _ => println!("Unexpected message received")
+                    _ => println!("Unexpected message received {:?}",msg.data)
                 }
             }
             Ok(Some(game_sockets::GameNetworkEvent::Connected(conn))) => {

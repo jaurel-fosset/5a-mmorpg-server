@@ -147,7 +147,7 @@ impl BrokerTask
             (
                 BroadcastPacket
                 {
-                    topic: orchestrator,
+                    data: vec!(orchestrator),
                 }
             )
         ).write().unwrap();
@@ -169,7 +169,7 @@ impl BrokerTask
             (
                 BroadcastPacket
                 {
-                    topic: orchestrator,
+                    data: vec!(orchestrator),
                 }
             )
         ).write().unwrap();

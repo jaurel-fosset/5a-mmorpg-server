@@ -143,6 +143,8 @@ fn main()
         }
     };
 
+    println!("entrée boucle");
+
     loop
     {
         if let Some(event) = network.poll_once()

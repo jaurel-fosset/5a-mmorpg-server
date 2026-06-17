@@ -100,7 +100,7 @@ impl NetworkGlobalState
     {
         match self.orchestrator.poll_single()
         {
-            None => return None,
+            None => (),
             Some(packet) =>
             {
                 match packet.data
@@ -271,6 +271,7 @@ impl OrchestratorConnection
         {
             gs::GameNetworkEvent::Connected(connection) =>
             {
+                println!("[Network] Orchestrator Connected!");
                 if self.connection.is_some() { return None; }
 
                 self.connection = Some(connection);
@@ -280,10 +281,11 @@ impl OrchestratorConnection
             gs::GameNetworkEvent::Disconnected(_) => None,
             gs::GameNetworkEvent::Message { connection, stream, data } =>
             {
-                if self.connection != Some(connection) { return None; }
-                if self.command_stream != Some(stream) { return None; }
+                //if self.connection != Some(connection) { return None; }
+                //if self.command_stream != Some(stream) { return None; }
 
                 let msg = PacketMessage::read(data).unwrap();
+                println!("Orchestrator packet : {:?}", msg);
                 Some(msg)
             }
             gs::GameNetworkEvent::Error { .. } => None,
@@ -314,7 +316,8 @@ impl BrokerSocket
     pub fn new(address: net::Ipv4Addr) -> Option<BrokerSocket>
     {
         let backend = gs::protocols::QuicBackend::new();
-        let socket = gs::GamePeer::new(backend);
+        let mut socket = gs::GamePeer::new(backend);
+        println!("[Network] {}:{}", address,BROKER_PORT);
         socket.connect(address.to_string().as_str(), BROKER_PORT).ok()?;
 
         Some(Self
@@ -349,6 +352,7 @@ impl BrokerSocket
         {
             gs::GameNetworkEvent::Connected(connection) =>
             {
+                println!("[Network] Broker Connected!");
                 if self.connection.is_some() { return None; }
                 
                 self.connection = Some(connection);
