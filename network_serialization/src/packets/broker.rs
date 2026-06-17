@@ -1,7 +1,7 @@
-use bytes::{Bytes, BytesMut};
-use crate::{Deserializable, Serializable, SerializationError};
 use crate::input::InputData;
 use crate::packets::topic::TopicTree;
+use crate::{Deserializable, Serializable, SerializationError};
+use bytes::{Bytes, BytesMut};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct SubscribePacket{
@@ -94,18 +94,32 @@ impl Deserializable for ClientInputBrokerPacket {
     }
 }
 
+#[repr(u8)]
+#[derive(int_enum::IntEnum, Debug, Eq, PartialEq, Clone, Copy)]
+pub enum NetworkId {
+    Orchestrator = 0,
+    Broker,
+    Spatial,
+    Shard,
+    Client,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClientHelloPacket {
-    
+    pub client_type: NetworkId,
 }
 impl Serializable for ClientHelloPacket {
-    fn serialize(self, _bytes: &mut BytesMut) -> Result<(), SerializationError> {
+    fn serialize(self, bytes: &mut BytesMut) -> Result<(), SerializationError> {
+        (self.client_type as u8).serialize(bytes)?;
         Ok(())
     }
 }
 impl Deserializable for ClientHelloPacket {
-    fn deserialize(_bytes: &mut Bytes) -> Result<Self, SerializationError> {
-        Ok(Self {})
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError> {
+        let data = u8::deserialize(bytes)?;
+        let client_type = NetworkId::try_from(data)
+            .map_err(|_| SerializationError::InvalidDeserializationState)?;
+        Ok(Self {client_type})
     }
 }
 
@@ -122,6 +136,6 @@ impl Serializable for ClientHandshakePacket {
 impl Deserializable for ClientHandshakePacket {
     fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError> {
         let client_id = u32::deserialize(bytes)?;
-        Ok(Self {client_id})
+        Ok(Self { client_id })
     }
 }

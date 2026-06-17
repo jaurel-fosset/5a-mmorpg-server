@@ -105,7 +105,7 @@ impl ShardsTask
 
         let config = ContainerCreateBody
         {
-            image: Some(String::from("mmorpg-server-game_server")),
+            image: Some(String::from("game_server")),
             env: Some(vec![
                 String::from("IP=0.0.0.0"),
                 String::from(&format!("PORT={}", SHARD_PORT)),

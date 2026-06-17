@@ -196,7 +196,7 @@ impl ShardManager
 
     fn get_free_shard(&self) -> Option<ShardId>
     {
-        self.shards.keys().copied().next()
+        self.free_shards.keys().copied().next()
     }
 
     fn get_deleted_in_use_shard(&self) -> Option<ShardId>

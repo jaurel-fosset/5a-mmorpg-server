@@ -9,6 +9,7 @@ impl Plugin for ClientHandlingPlugin
 {
     fn build(&self, app: &mut App)
     {
+        println!("ClientHandlingPlugin");
         app
             .insert_resource(ActiveClients::default())
             .insert_resource(ConnectingClients::default())

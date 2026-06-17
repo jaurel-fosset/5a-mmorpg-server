@@ -3,7 +3,7 @@ use std::time::Duration;
 use bytes::{Bytes, BytesMut};
 use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream};
 use network_serialization::packet::{PacketData, PacketMessage};
-use network_serialization::packets::broker::{BroadcastPacket, ClientHandshakePacket, ClientInputBrokerPacket, PublishPacket};
+use network_serialization::packets::broker::{BroadcastPacket, ClientHandshakePacket, ClientHelloPacket, ClientInputBrokerPacket, NetworkId, PublishPacket};
 use network_serialization::packets::Packet;
 use network_serialization::Serializable;
 use network_serialization::packets::topic::{TopicLeaf, TopicNode, TopicTree, TopicTreeType};
@@ -16,7 +16,6 @@ struct ConnectionData {
 
 struct BrokerState{
     game_peer : GamePeer,
-    spatial_server: Option<ConnectionData>,
     client_to_connection: HashMap<u32, ConnectionData>,
     connection_to_client: HashMap<ConnectionData, u32>,
     game_connection_to_client: HashMap<GameConnection, u32>,
@@ -29,7 +28,6 @@ impl BrokerState {
     fn new(game_peer: GamePeer) -> BrokerState {
         BrokerState{
             game_peer,
-            spatial_server: None,
             client_to_connection: Default::default(),
             connection_to_client: Default::default(),
             game_connection_to_client: Default::default(),
@@ -60,7 +58,7 @@ async fn main() {
                     PacketData::Unsubscribe(packet) => unsubscribe_client(&mut broker, connection_data, packet.client_id, packet.topic),
                     PacketData::Publish(packet) => publish_shard_state(&mut broker, connection_data, packet),
                     PacketData::ClientInputBroker(packet) => handle_player_input(&mut broker, connection_data, packet),
-                    PacketData::ClientHello(packet) => register_client(&mut broker, connection_data),
+                    PacketData::ClientHello(packet) => register_client(&mut broker, connection_data, packet),
 
                     _ => println!("Unexpected message received {:?}",msg.data)
                 }
@@ -102,12 +100,107 @@ fn register_connection(
 fn register_client(
     state: &mut BrokerState,
     connection_data: ConnectionData,
+    packet: ClientHelloPacket,
 ){
     println!("Register Client");
 
     let new_client_id = state.next_client_id.clone();
     register_connection(state, connection_data.clone());
-    
+
+    match packet.client_type {
+        NetworkId::Spatial => {
+
+        }
+        NetworkId::Shard => {
+            let mut tree_orchestrator = TopicTree::new_empty("orchestrator".to_string());
+            let mut sub_tree_server_creations = TopicTree::new_empty("server_creations".to_string());
+            sub_tree_server_creations.add_leaf(new_client_id.to_string(),vec!(packet.client_type as u8));
+            tree_orchestrator.add_tree(sub_tree_server_creations);
+
+            let packet = PacketMessage::new(
+                PacketData::Broadcast(
+                    BroadcastPacket {
+                        data: vec!(tree_orchestrator)
+                    }
+                )
+            );
+
+            println!("broker attempted send server_creations {:?}", packet);
+
+            let bytes: Bytes = packet.write().unwrap();
+
+            let key_name : String = "orchestrator/server_creations/".to_owned();
+            let key_vec = Vec::<u8>::from(key_name.as_bytes());
+
+            for (subscriber_id, subscribed_keys) in state.client_to_subscribed_keys.iter() {
+                let matches = subscribed_keys.iter().any(|key| {
+                    let key_str = String::from_utf8(key.clone()).unwrap_or_default();
+                    key_name.starts_with(&key_str)
+                });
+
+                println!("Subscribed {} keys {:?} keyname {}", subscriber_id, subscribed_keys,key_name);
+
+                if matches {
+                    let Some(connection) = state.client_to_connection.get(subscriber_id) else { continue; };
+                    println!("on s'apprête à envoyer de la donnée à connection {:?}",&connection.connection);
+                    state.game_peer.send(
+                        &connection.connection,
+                        &connection.stream,
+                        bytes.clone()
+                    ).unwrap();
+                }
+            }
+        }
+        NetworkId::Client => {
+            let mut tree_entities = TopicTree::new_empty("entities".to_string());
+            let mut tree_position = TopicTree::new_empty("position".to_string());
+
+            let mut bytes = BytesMut::new();
+            let x : f32 = 25.0;
+            let y : f32 = 25.0;
+            x.serialize(&mut bytes).unwrap();
+            y.serialize(&mut bytes).unwrap();
+            tree_position.add_leaf(new_client_id.to_string(), Vec::<u8>::from(bytes));
+            tree_entities.add_tree(tree_position);
+
+
+            let packet = PacketMessage::new(
+                PacketData::Broadcast(
+                    BroadcastPacket {
+                        data: vec!(tree_entities)
+                    }
+                )
+            );
+
+            println!("broker attempted send server_creations {:?}", packet);
+
+            let bytes: Bytes = packet.write().unwrap();
+
+            let key_name : String = "entities/position/".to_owned();
+            let key_vec = Vec::<u8>::from(key_name.as_bytes());
+
+            for (subscriber_id, subscribed_keys) in state.client_to_subscribed_keys.iter() {
+                let matches = subscribed_keys.iter().any(|key| {
+                    let key_str = String::from_utf8(key.clone()).unwrap_or_default();
+                    key_name.starts_with(&key_str)
+                });
+
+                println!("Subscribed {} keys {:?} keyname {}", subscriber_id, subscribed_keys,key_name);
+
+                if matches {
+                    let Some(connection) = state.client_to_connection.get(subscriber_id) else { continue; };
+                    println!("on s'apprête à envoyer de la donnée à connection {:?}",&connection.connection);
+                    state.game_peer.send(
+                        &connection.connection,
+                        &connection.stream,
+                        bytes.clone()
+                    ).unwrap();
+                }
+            }
+        }
+        _ => ()
+    }
+
     let packet = PacketMessage::new(
         PacketData::ClientHandshake(
             ClientHandshakePacket {
@@ -146,17 +239,6 @@ fn cleanup_disconnected_client(
 
     println!("Client {} cleaned up", client_id);
 }
-
-fn register_spatial_server(
-    state: &mut BrokerState,
-    connection_data: ConnectionData,
-){
-    if state.spatial_server == None {
-        println!("Register spatial server");
-        state.spatial_server = Some(connection_data);
-    }
-}
-
 fn register_shard(
     state: &mut BrokerState,
     connection_data: ConnectionData,
@@ -180,8 +262,6 @@ fn subscribe_client(
     client_id: u32,
     topic: TopicTree,
 ){
-    register_spatial_server(state, connection_data);
-
     let keys = topic.keys();
     let subscribed_key  = state.client_to_subscribed_keys.entry(client_id).or_insert(Vec::new());
     for key in keys {
@@ -203,8 +283,6 @@ fn unsubscribe_client(
     client_id: u32,
     topic: TopicTree
 ){
-    register_spatial_server(state, connection_data);
-
     let keys = topic.keys();
     let subscribed_key = state.client_to_subscribed_keys.entry(client_id).or_insert(Vec::new());
     for key in keys {

@@ -1,12 +1,15 @@
 pub mod client;
 pub mod orchestrator;
 mod heartbeat;
+mod broker;
 
 use bevy::prelude::*;
 use bevy::ecs::schedule::ScheduleLabel;
 use game_sockets;
-
+use network_serialization::packet::{PacketData, PacketMessage};
+use network_serialization::packets::Packet;
 use crate::env_parameter::Environment;
+use crate::network::broker::BrokerPeer;
 use crate::network::client::{ClientHandlingPlugin, ConnectingClients};
 use crate::network::heartbeat::HeartbeatNetworkPlugin;
 use crate::network::orchestrator::{HeartbeatStreamFactory, OrchestratorHandlingPlugin};
@@ -61,9 +64,23 @@ impl NetworkPluginGroup
                     clients.add_client(connection);
                 }
                 game_sockets::GameNetworkEvent::Disconnected(_) => {}
-                game_sockets::GameNetworkEvent::Message { .. } =>
+                game_sockets::GameNetworkEvent::Message { data, .. } =>
                 {
 
+                    println!("message received {:?}",data);
+                    let Ok(msg) = PacketMessage::read(data) else {continue;};
+
+                    let packet = match msg.data {
+                        PacketData::OrchestratorHello(packet) => {
+                            println!("Got Orchestrator hello packet: {:?}", packet.broker);
+                            packet
+                        }
+                        _ => return,
+                    };
+
+                    let mut broker = BrokerPeer::new(packet.broker);
+                    broker.send_client_hello();
+                    commands.insert_resource(broker);
                 }
                 game_sockets::GameNetworkEvent::Error { .. } => {}
                 game_sockets::GameNetworkEvent::StreamCreated(connection, stream) =>

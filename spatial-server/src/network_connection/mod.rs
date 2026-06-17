@@ -6,7 +6,7 @@ use std::time::Duration;
 use game_sockets as gs;
 use network_serialization::Deserializable;
 use network_serialization::packet::{PacketData, PacketMessage};
-use network_serialization::packets::broker::{BroadcastPacket, SubscribePacket, UnsubscribePacket};
+use network_serialization::packets::broker::{BroadcastPacket, ClientHelloPacket, NetworkId, SubscribePacket, UnsubscribePacket};
 use network_serialization::packets::game_server::HeartbeatPacket;
 use network_serialization::packets::Packet;
 use network_serialization::packets::spatial_server::*;
@@ -15,6 +15,7 @@ use crate::network_object::entity::Entity;
 use crate::network_object::shard::ShardId;
 
 
+#[derive(Debug)]
 pub enum NetworkEvent
 {
     ShardsUpdate(Vec<u32>, Vec<u32>),
@@ -134,6 +135,39 @@ impl NetworkGlobalState
             {
                 Some(self.parse_broadcast(data)?)
             }
+            PacketData::ClientHandshake(data) => {
+                let mut tree_entities = TopicTree::new_empty("entities".to_string());
+                let mut tree_position = TopicTree::new_empty("position".to_string());
+                tree_position.add_leaf("*".to_string(),Vec::new());
+                tree_entities.add_tree(tree_position);
+
+                let bytes = PacketMessage::new(
+                    PacketData::Subscribe(
+                        SubscribePacket{
+                            client_id: data.client_id,
+                            topic: tree_entities,
+                        }
+                    )
+                ).write().unwrap();
+                broker.send(bytes).unwrap();
+
+                let mut tree_orchestrator = TopicTree::new_empty("orchestrator".to_string());
+                let mut sub_tree_server_creation = TopicTree::new_empty("server_creations".to_string());
+                sub_tree_server_creation.add_leaf("*".to_string(),Vec::new());
+                tree_orchestrator.add_tree(sub_tree_server_creation);
+
+                let bytes = PacketMessage::new(
+                    PacketData::Subscribe(
+                        SubscribePacket{
+                            client_id: data.client_id,
+                            topic: tree_orchestrator,
+                        }
+                    )
+                ).write().unwrap();
+                broker.send(bytes).unwrap();
+
+                None
+            }
             _ => None,
         }
     }
@@ -185,7 +219,11 @@ impl NetworkGlobalState
 
                 let created_shards = created_shards.unwrap_or(Vec::new());
                 let destroyed_shards = destroyed_shards.unwrap_or(Vec::new());
-                return Some(NetworkEvent::ShardsUpdate(created_shards, destroyed_shards))
+
+
+                let test = NetworkEvent::ShardsUpdate(created_shards, destroyed_shards);
+                println!("[Spatial] Broadcast packet: {:?}", test);
+                return Some(test)
             }
             else if tree.name == "entities"
             {
@@ -313,6 +351,7 @@ impl OrchestratorConnection
 
 const BROKER_PORT: u16 = 10_001;
 
+#[derive(Debug)]
 struct BrokerSocket
 {
     socket: gs::GamePeer,
@@ -379,6 +418,16 @@ impl BrokerSocket
                 if self.command_stream.is_some() { return None; }
                 
                 self.command_stream = Some(stream);
+
+                let bytes = PacketMessage::new(
+                    PacketData::ClientHello(
+                        ClientHelloPacket{
+                            client_type: NetworkId::Spatial
+                        }
+                    )
+                ).write().unwrap();
+
+                _ = self.send(bytes);
                 None
             }
             gs::GameNetworkEvent::StreamClosed(_, _) => None,
@@ -411,8 +460,8 @@ pub enum NetworkError
 
 fn server_allocation_broadcast(tree: TopicTree) -> (Option<impl Iterator<Item=u32>>, Option<impl Iterator<Item=u32>>)
 {
-    let creations = tree
-        .get_sub_tree("server_creations")
+    let creations = tree.clone()
+        .get_child_owned("server_creations")
         .and_then(|creations|
             {
                 match get_children(creations)
@@ -427,7 +476,7 @@ fn server_allocation_broadcast(tree: TopicTree) -> (Option<impl Iterator<Item=u3
             });
 
     let deletions = tree
-        .get_sub_tree("server_deletions")
+        .get_child_owned("server_deletions")
         .and_then(|deletions|
         {
             match get_children(deletions)
@@ -494,7 +543,7 @@ fn broadcast_extract_shard<T>(data: T) -> impl Iterator<Item=u32>
 
 fn position_update_broadcast(tree: TopicTree) -> Option<impl Iterator<Item=(u32, f32, f32)>>
 {
-    let positions = match tree.get_sub_tree("positions")
+    let positions = match tree.get_child_owned("position")
     {
         Some(positions) => positions,
         None =>

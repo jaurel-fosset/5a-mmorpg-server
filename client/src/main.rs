@@ -5,7 +5,7 @@ use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass, egui};
 use circular_buffer::CircularBuffer;
 use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream, GameStreamReliability};
 use network_serialization::packet::{PacketData, PacketMessage};
-use network_serialization::packets::broker::{ClientHelloPacket, ClientInputBrokerPacket};
+use network_serialization::packets::broker::{ClientHelloPacket, ClientInputBrokerPacket, NetworkId};
 use network_serialization::packets::Packet;
 
 fn main() {
@@ -138,7 +138,9 @@ fn connect_to_server(
         std::thread::sleep(Duration::from_millis(10));
     };
 
-    let data = PacketData::ClientHello(ClientHelloPacket {});
+    let data = PacketData::ClientHello(ClientHelloPacket {
+        client_type: NetworkId::Client
+    });
     let packet = PacketMessage::new(data);
 
     peer.send(&conn, &stream, packet.write().unwrap()).unwrap();

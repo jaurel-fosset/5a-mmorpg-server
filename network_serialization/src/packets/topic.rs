@@ -43,6 +43,13 @@ impl TopicTree {
         }
     }
 
+    pub fn get_child_owned(self, name: &str) -> Option<TopicTree> {
+        match self.item {
+            TopicTreeType::Node(node) => node.data.into_iter().find(|t| t.name == name),
+            TopicTreeType::Leaf(_) => None,
+        }
+    }
+
     pub fn keys(self) -> Vec<Vec<u8>> {
         match self.item {
             TopicTreeType::Leaf(_) => vec!(Vec::from(self.name)),

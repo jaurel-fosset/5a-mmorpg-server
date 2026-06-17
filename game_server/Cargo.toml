@@ -8,3 +8,4 @@ bevy = {workspace = true}
 game_sockets = {workspace = true}
 thiserror = { workspace = true }
 network_serialization = { path="../network_serialization" }
+bytes = {workspace = true}
