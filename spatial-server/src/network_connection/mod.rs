@@ -1,6 +1,5 @@
 ﻿use std::cmp::PartialEq;
 use std::net;
-use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::time::Duration;
 use game_sockets as gs;
@@ -13,6 +12,7 @@ use network_serialization::packets::spatial_server::*;
 use network_serialization::packets::topic::{TopicTree, TopicTreeType};
 use crate::network_object::entity::Entity;
 use crate::network_object::shard::ShardId;
+use std::time;
 
 
 #[derive(Debug)]
@@ -22,11 +22,14 @@ pub enum NetworkEvent
     PositionUpdate(Vec<(u32, f32, f32)>),
 }
 
+const REQUEST_SHARD_DURATION: Duration = Duration::from_secs(10);
+
 pub struct NetworkGlobalState
 {
     orchestrator: OrchestratorConnection,
     redis_ip: Option<net::Ipv4Addr>,
     broker: Option<BrokerSocket>,
+    last_shard_request_time: time::Instant,
 }
 
 impl NetworkGlobalState
@@ -38,6 +41,7 @@ impl NetworkGlobalState
             orchestrator: OrchestratorConnection::new(),
             redis_ip: None,
             broker: None,
+            last_shard_request_time: time::Instant::now(),
         }
     }
 
@@ -172,8 +176,14 @@ impl NetworkGlobalState
         }
     }
 
-    pub fn request_more_shards(&self, amount: u64)
+    pub fn request_more_shards(&mut self, amount: u64)
     {
+        if time::Instant::now().duration_since(self.last_shard_request_time) < REQUEST_SHARD_DURATION
+        {
+            return;
+        }
+        self.last_shard_request_time = time::Instant::now();
+
         println!("[Spatial] Requesting moreShards: {}", amount);
         let packet = PacketMessage::new(
             PacketData::AllocateShards(AllocateShardsPacket::new(amount))
@@ -364,7 +374,7 @@ impl BrokerSocket
     pub fn new(address: net::Ipv4Addr) -> Option<BrokerSocket>
     {
         let backend = gs::protocols::QuicBackend::new();
-        let mut socket = gs::GamePeer::new(backend);
+        let socket = gs::GamePeer::new(backend);
         println!("[Network] {}:{}", address,BROKER_PORT);
         socket.connect(address.to_string().as_str(), BROKER_PORT).ok()?;
 
@@ -421,7 +431,7 @@ impl BrokerSocket
 
                 let bytes = PacketMessage::new(
                     PacketData::ClientHello(
-                        ClientHelloPacket{
+                        ClientHelloPacket {
                             client_type: NetworkId::Spatial
                         }
                     )
