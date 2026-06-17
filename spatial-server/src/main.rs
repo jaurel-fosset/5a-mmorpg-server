@@ -4,6 +4,7 @@ use spatial_server::network_object::entity::{Entity, EntityId, EntityManager};
 use spatial_server::network_object::shard::{ShardId, ShardManager};
 use spatial_server::quad_tree::QuadTree;
 use std::collections::HashSet;
+use std::time::{Duration, Instant};
 use network_serialization::packets::topic::TopicTree;
 
 const MAX_AUTHORITY_SWITCH_RANGE: f32 = 100.0;
@@ -18,7 +19,7 @@ fn update_subscription(network_manager: &mut NetworkGlobalState, quad_tree: &mut
 
     for shard in added_shard
     {
-        let mut positions = TopicTree::new_empty("positions".to_string());
+        let mut positions = TopicTree::new_empty("position".to_string());
         positions.add_leaf(format!("{}", entity.id().0), Vec::new());
 
         let mut entities = TopicTree::new_empty("entities".to_string());
@@ -112,15 +113,20 @@ fn main()
         if network.is_orchestrator_connected() { break; }
     }
 
-    network.request_more_shards(1);
+    let tick_duration = Duration::from_millis(66);
+
     let mut quad_tree: QuadTree = loop
     {
+        let start_time = Instant::now();
+
+        network.request_more_shards(1);
         if let Some(event) = network.poll_once()
         {
             match event
             {
                 NetworkEvent::ShardsUpdate(created_shards, destroyed_shards) =>
                 {
+                    network.reset_timer();
                     for shard in created_shards
                     {
                         shard_manager.on_receive_shard_creation(shard);
@@ -144,7 +150,14 @@ fn main()
         match shard_manager.new_shard(map_bounds)
         {
             Some(shard) => break QuadTree::new(map_bounds, shard),
-            None => continue,
+            None => (),
+        }
+
+        let work_duration = start_time.elapsed();
+        if let Some(sleep_duration) = tick_duration.checked_sub(work_duration) {
+            std::thread::sleep(sleep_duration);
+        } else {
+            println!("LAG: work took {}ms", work_duration.as_millis());
         }
     };
 
@@ -152,12 +165,16 @@ fn main()
 
     loop
     {
+        let start_time = Instant::now();
+
         if let Some(event) = network.poll_once()
         {
             match event
             {
                 NetworkEvent::ShardsUpdate(created_shards, destroyed_shards) =>
                 {
+                    println!("Shards updated!");
+                    network.reset_timer();
                     for shard in created_shards
                     {
                         shard_manager.on_receive_shard_creation(shard);
@@ -173,11 +190,10 @@ fn main()
 
                         network.request_more_shards(lost_shard)
                     }
-
-                    break;
                 }
                 NetworkEvent::PositionUpdate(entity_positions) =>
                 {
+                    println!("Position updated!");
                     let positions = entity_positions
                         .into_iter()
                         .flat_map(|pos|
@@ -206,5 +222,12 @@ fn main()
         }
 
         _ = network.send_heartbeat();
+
+        let work_duration = start_time.elapsed();
+        if let Some(sleep_duration) = tick_duration.checked_sub(work_duration) {
+            std::thread::sleep(sleep_duration);
+        } else {
+            println!("LAG: work took {}ms", work_duration.as_millis());
+        }
     }
 }

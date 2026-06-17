@@ -63,7 +63,8 @@ impl NetworkGlobalState
             )
         ).write().unwrap();
 
-        self.orchestrator.send(packet)
+        //self.orchestrator.send(packet)
+        Ok(())
     }
 
     pub fn subscribe(&self, id: u32, topic: TopicTree) -> Result<(), NetworkError>
@@ -260,6 +261,11 @@ impl NetworkGlobalState
     pub fn is_orchestrator_connected(&self) -> bool {
         self.orchestrator.is_connected()
     }
+
+    pub fn reset_timer(&mut self)
+    {
+        self.last_shard_request_time = time::Instant::now() - REQUEST_SHARD_DURATION * 2;
+    }
 }
 
 const ORCHESTRATOR_PORT: u16 = 50_000;
@@ -292,6 +298,7 @@ impl OrchestratorConnection
     {
         if let Some(connection) = &self.connection && let Some(command_stream) = &self.command_stream
         {
+            println!("[Orchestrator] Sending command {:?}",connection);
             self.socket.send(connection, command_stream, bytes).map_err(|_| { NetworkError::SendError })
         }
         else

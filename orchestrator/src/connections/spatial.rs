@@ -1,6 +1,7 @@
 ﻿use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
+use std::time::{Duration, Instant};
 use bollard::config::{ContainerCreateBody, HostConfig};
 use bollard::query_parameters::{CreateContainerOptions, StartContainerOptions};
 use tokio::{sync, task};
@@ -115,8 +116,12 @@ impl SpatialTask
 
         // TODO : add to redis
 
+        let tick_duration = Duration::from_millis(66);
+
         loop
         {
+            let start_time = Instant::now();
+
             while let Some(connection_event) = socket.poll().transpose()
             {
                 let connection_event = match connection_event
@@ -171,7 +176,13 @@ impl SpatialTask
                 }
                 task::yield_now().await;
             }
-            task::yield_now().await;
+
+            let work_duration = start_time.elapsed();
+            if let Some(sleep_duration) = tick_duration.checked_sub(work_duration) {
+                tokio::time::sleep(sleep_duration).await;
+            } else {
+                println!("LAG: work took {}ms", work_duration.as_millis());
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ use game_sockets::{GameConnection, GameNetworkEvent, GamePeer, GameStream};
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::broker::{BroadcastPacket, ClientHandshakePacket, ClientHelloPacket, ClientInputBrokerPacket, NetworkId, PublishPacket};
 use network_serialization::packets::Packet;
+use network_serialization::packets::spatial_server::AuthoritySwitchPacket;
 use network_serialization::Serializable;
 use network_serialization::packets::topic::{TopicLeaf, TopicNode, TopicTree, TopicTreeType};
 
@@ -48,7 +49,7 @@ async fn main() {
     loop {
         match broker.game_peer.poll() {
             Ok(Some(game_sockets::GameNetworkEvent::Message { connection, stream, data })) => {
-                println!("Got message from peer: {:?}", connection);
+                //println!("Got message from peer: {:?}", connection);
                 let msg = PacketMessage::read(data).unwrap();
 
                 let connection_data = ConnectionData{ connection, stream };
@@ -59,6 +60,8 @@ async fn main() {
                     PacketData::Publish(packet) => publish_shard_state(&mut broker, connection_data, packet),
                     PacketData::ClientInputBroker(packet) => handle_player_input(&mut broker, connection_data, packet),
                     PacketData::ClientHello(packet) => register_client(&mut broker, connection_data, packet),
+
+                    PacketData::AuthoritySwitch(packet) => authority_switch(&mut broker, connection_data, packet),
 
                     _ => println!("Unexpected message received {:?}",msg.data)
                 }
@@ -85,6 +88,28 @@ async fn main() {
     }
 }
 
+fn authority_switch(
+    state: &mut BrokerState,
+    connection_data: ConnectionData,
+    packet: AuthoritySwitchPacket) {
+    let client_id = packet.client;
+    let new_shard = packet.new_shard;
+    let old_shard = packet.old_shard;
+
+    let input_key = format!("entities/input/{}", client_id).into_bytes();
+    let position_key = format!("entities/position/{}", client_id).into_bytes();
+
+    // Modifie new_shard
+    let new_shard_keys = state.client_to_subscribed_keys.entry(new_shard).or_insert(Vec::new());
+    new_shard_keys.push(input_key.clone());
+    new_shard_keys.retain(|x| *x != position_key);
+
+    // Modifie old_shard — accès séparé
+    let old_shard_keys = state.client_to_subscribed_keys.entry(old_shard).or_insert(Vec::new());
+    old_shard_keys.push(position_key.clone());
+    old_shard_keys.retain(|x| *x != input_key);
+}
+
 fn register_connection(
     state: &mut BrokerState,
     connection_data: ConnectionData
@@ -102,8 +127,6 @@ fn register_client(
     connection_data: ConnectionData,
     packet: ClientHelloPacket,
 ){
-    println!("Register Client");
-
     let new_client_id = state.next_client_id.clone();
     register_connection(state, connection_data.clone());
 
@@ -125,8 +148,6 @@ fn register_client(
                 )
             );
 
-            println!("broker attempted send server_creations {:?}", packet);
-
             let bytes: Bytes = packet.write().unwrap();
 
             let key_name : String = "orchestrator/server_creations/".to_owned();
@@ -137,8 +158,6 @@ fn register_client(
                     let key_str = String::from_utf8(key.clone()).unwrap_or_default();
                     key_name.starts_with(&key_str)
                 });
-
-                println!("Subscribed {} keys {:?} keyname {}", subscriber_id, subscribed_keys,key_name);
 
                 if matches {
                     let Some(connection) = state.client_to_connection.get(subscriber_id) else { continue; };
@@ -172,7 +191,7 @@ fn register_client(
                 )
             );
 
-            println!("broker attempted send server_creations {:?}", packet);
+            println!("broker envoie entities/position {:?}", packet);
 
             let bytes: Bytes = packet.write().unwrap();
 
@@ -184,8 +203,6 @@ fn register_client(
                     let key_str = String::from_utf8(key.clone()).unwrap_or_default();
                     key_name.starts_with(&key_str)
                 });
-
-                println!("Subscribed {} keys {:?} keyname {}", subscriber_id, subscribed_keys,key_name);
 
                 if matches {
                     let Some(connection) = state.client_to_connection.get(subscriber_id) else { continue; };
@@ -317,7 +334,6 @@ fn publish_shard_state(
         }
 
         if topics_to_send.len() == 0 {continue;}
-        println!("on s'apprête à envoyer de la donnée à client {}",client);
         let Some(connection) = state.client_to_connection.get(client) else { continue; };
         println!("on s'apprête à envoyer de la donnée à connection {:?}",&connection.connection);
         let packet = PacketMessage::new(
@@ -326,8 +342,7 @@ fn publish_shard_state(
             )
         );
         let bytes = packet.write().unwrap();
-
-        println!("on envoie une donnée à quelqu'un");
+        
         match state.game_peer.send(&connection.connection, &connection.stream, bytes){
             Ok(_) => {}
             Err(e) => {println!("Error during \"publish_shard state\": {}", e);}

@@ -1,6 +1,7 @@
 ﻿use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
+use std::time::{Duration, Instant};
 use bollard::config::{ContainerCreateBody, HostConfig};
 use bollard::query_parameters::{CreateContainerOptions, StartContainerOptions};
 use game_sockets as gs;
@@ -116,8 +117,11 @@ impl BrokerTask
         let (socket, connection, stream) = init_connection(
             self.address, self.port, self.orchestrator_ip, self.redis_dns_ip, self.address).await;
 
+        let tick_duration = Duration::from_millis(66);
+
         while let Some(event) = self.command_receiver.recv().await
         {
+            let start_time = Instant::now();
             match event
             {
                 Commands::ServerDestruction(id, server_type) =>
@@ -128,6 +132,13 @@ impl BrokerTask
                 {
                     Self::publish_server_creation(&socket, &connection, &stream, id, server_type);
                 }
+            }
+
+            let work_duration = start_time.elapsed();
+            if let Some(sleep_duration) = tick_duration.checked_sub(work_duration) {
+                tokio::time::sleep(sleep_duration).await;
+            } else {
+                println!("LAG: work took {}ms", work_duration.as_millis());
             }
         }
     }

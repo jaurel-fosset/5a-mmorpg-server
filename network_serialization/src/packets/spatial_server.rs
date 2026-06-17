@@ -114,9 +114,9 @@ impl Deserializable for ShardDestructionPacket
 #[derive(Debug)]
 pub struct AuthoritySwitchPacket
 {
-    old_shard: u32,
-    new_shard: u32,
-    client: u32,
+    pub old_shard: u32,
+    pub new_shard: u32,
+    pub client: u32,
 }
 
 impl AuthoritySwitchPacket

@@ -1,5 +1,6 @@
 ﻿use std::collections::HashMap;
 use std::net::Ipv4Addr;
+use std::time::{Duration, Instant};
 use bollard::config::{ContainerCreateBody, HostConfig};
 use bollard::Docker;
 use bollard::query_parameters::{CreateContainerOptions, StartContainerOptions};
@@ -43,8 +44,12 @@ impl ShardsTask
 
     pub async fn run(mut self)
     {
+        let tick_duration = Duration::from_millis(66);
         loop
         {
+            let start_time = Instant::now();
+
+
             let spatial_events = match self.spatial_events.recv().await
             {
                 Ok(spatial_events) => spatial_events,
@@ -66,7 +71,12 @@ impl ShardsTask
                 }
             }
 
-            task::yield_now().await;
+            let work_duration = start_time.elapsed();
+            if let Some(sleep_duration) = tick_duration.checked_sub(work_duration) {
+                tokio::time::sleep(sleep_duration).await;
+            } else {
+                println!("LAG: work took {}ms", work_duration.as_millis());
+            }
         }
     }
 
@@ -82,12 +92,16 @@ impl ShardsTask
         
         for _ in 0..shard_number
         {
+            println!("spawning shard");
             let (ip, port, id) = loop
             {
                 match self.spawn_single_shard(&mut docker).await
                 {
                     Ok(shard) => break shard,
-                    Err(error) => continue,
+                    Err(error) => {
+                        eprintln!("Failed to spawn shard: {}", error);
+                        continue
+                    },
                 }
             };
 
@@ -108,7 +122,7 @@ impl ShardsTask
             image: Some(String::from("game_server")),
             env: Some(vec![
                 String::from("IP=0.0.0.0"),
-                String::from(&format!("PORT={}", SHARD_PORT)),
+                String::from(&format!("PORT={}", SHARD_PORT + (shard_id as u16))),
                 String::from("PLAYER_CAPACITY=120")
             ]),
             host_config: Some(HostConfig
@@ -122,7 +136,7 @@ impl ShardsTask
                         Some(vec![bollard::models::PortBinding
                         {
                             host_ip: Some("0.0.0.0".to_string()),
-                            host_port: Some(SHARD_PORT.to_string()),
+                            host_port: Some((SHARD_PORT + (shard_id as u16)).to_string()),
                         }]),
                     );
                     map
@@ -149,7 +163,7 @@ impl ShardsTask
             None::<StartContainerOptions>,
         ).await.map_err(|_| SpawnShardError::CouldNotCreateContainer)?;
 
-        Ok((get_docker_ip(docker, &response.id).await, SHARD_PORT, shard_id))
+        Ok((get_docker_ip(docker, &response.id).await, SHARD_PORT+(shard_id as u16), shard_id))
     }
 }
 

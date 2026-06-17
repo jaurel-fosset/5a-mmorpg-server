@@ -136,12 +136,14 @@ impl ShardManager
     pub fn on_receive_shard_creation(&mut self, shard_address: u32)
     {
         let shard_id = ShardId::new(shard_address);
+        println!("Shard id {}", shard_id);
 
         match self.get_deleted_in_use_shard()
         {
             None =>
                 {
                     self.free_shards.insert(shard_id, time::Instant::now());
+                    println!("Shard id {} inserted in free list", shard_id);
                 }
             Some(deleted_shard_id) =>
                 {
