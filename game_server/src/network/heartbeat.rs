@@ -1,9 +1,11 @@
+use std::net;
 use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 use bevy::diagnostic::{DiagnosticsStore, SystemInfo, SystemInformationDiagnosticsPlugin};
 use bevy::prelude::*;
 use game_sockets::GameStreamReliability;
 use network_serialization;
+use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::game_server::HeartbeatPacket;
 use network_serialization::packets::Packet;
 use crate::env_parameter::Environment;
@@ -58,17 +60,22 @@ impl HeartbeatNetworkPlugin
         let ram_load = ram_load_diagnostic.smoothed().unwrap_or(0.0);
         let ram_load = (ram_load * 1000.0).trunc();
         let ram_load = (ram_load * 255.0) / 1000.0;
-
-        let packet = HeartbeatPacket
-        {
-            ip: environment.ip.to_string().parse().unwrap(),
-            port: environment.port,
-            player_number: clients.num_clients(),
-            player_capacity: environment.player_capacity,
-            cpu_load: cpu_load as u8,
-            ram_load: ram_load as u8,
-        }.write();
-
+        
+        let packet = PacketMessage::new
+        (
+            PacketData::Heartbeat
+            (
+                HeartbeatPacket
+                {
+                    ip: environment.ip.to_string().parse().unwrap(),
+                    port: environment.port,
+                    player_number: clients.num_clients(),
+                    player_capacity: environment.player_capacity,
+                    cpu_load: cpu_load as u8,
+                    ram_load: ram_load as u8,
+                }
+            )
+        ).write();
         let packet = match packet
         {
             Ok(packet) => packet,

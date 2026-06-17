@@ -14,6 +14,7 @@ impl AllocateShardsPacket
     {
         Self { shard_count }
     }
+    pub fn shard_count(&self) -> u64 { self.shard_count }
 }
 
 impl Serializable for AllocateShardsPacket

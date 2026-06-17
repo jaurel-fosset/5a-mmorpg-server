@@ -1,6 +1,7 @@
 use crate::packets::Packet;
 use crate::{Deserializable, Serializable, SerializationError};
 use crate::packets::broker::{BroadcastPacket, ClientInputBrokerPacket, PublishPacket, ClientHelloPacket, SubscribePacket, UnsubscribePacket, ClientHandshakePacket};
+use crate::packets::game_server::HeartbeatPacket;
 use crate::packets::orchestrator::OrchestratorHelloPacket;
 use crate::packets::shard::ClientInputShardPacket;
 use crate::packets::spatial_server::{AllocateShardsPacket, AuthoritySwitchPacket, DeAllocateShardsPacket, ShardCreationPacket, ShardDestructionPacket};
@@ -37,9 +38,11 @@ pub enum PacketData {
     AuthoritySwitch(AuthoritySwitchPacket),
 
     OrchestratorHello(OrchestratorHelloPacket),
+    Heartbeat(HeartbeatPacket),
 }
 
 #[repr(u8)]
+#[derive(Debug, int_enum::IntEnum)]
 pub enum PacketTag {
     Subscribe = 0x00,
     Unsubscribe = 0x01,
@@ -57,33 +60,9 @@ pub enum PacketTag {
     AuthoritySwitch = 0x14,
 
     OrchestratorHello = 0x20,
+    Heartbeat = 0x21,
 }
 
-impl TryFrom<u8> for PacketTag {
-    type Error = SerializationError;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0x00 => Ok(PacketTag::Subscribe),
-            0x01 => Ok(PacketTag::Unsubscribe),
-            0x02 => Ok(PacketTag::Publish),
-            0x03 => Ok(PacketTag::Broadcast),
-            0x04 => Ok(PacketTag::ClientInputBroker),
-            0x05 => Ok(PacketTag::ClientHello),
-            0x06 => Ok(PacketTag::ClientHandshake),
-            0x07 => Ok(PacketTag::ClientInputShard),
-
-            0x10 => Ok(PacketTag::AllocateShards),
-            0x11 => Ok(PacketTag::DeAllocateShards),
-            0x12 => Ok(PacketTag::ShardCreation),
-            0x13 => Ok(PacketTag::ShardDestruction),
-            0x14 => Ok(PacketTag::AuthoritySwitch),
-
-            0x20 => Ok(PacketTag::OrchestratorHello),
-
-            _ => Err(SerializationError::InvalidDeserializationState),
-        }
-    }
-}
 
 impl PacketData {
     pub fn tag(&self) -> u8 {
@@ -104,6 +83,7 @@ impl PacketData {
             PacketData::AuthoritySwitch(_) => PacketTag::AuthoritySwitch as u8,
 
             PacketData::OrchestratorHello(_) => PacketTag::OrchestratorHello as u8,
+            PacketData::Heartbeat(_) => PacketTag::Heartbeat as u8,
         }
     }
 }
@@ -111,7 +91,7 @@ impl PacketData {
 impl Packet for PacketMessage {
     fn read(mut bytes: bytes::Bytes) -> Result<Self, SerializationError> {
         let tag = u8::deserialize(&mut bytes)?;
-        let packet_tag = PacketTag::try_from(tag)?;
+        let packet_tag = PacketTag::try_from(tag).map_err(|_| SerializationError::InvalidDeserializationState)?;
         let data = match packet_tag {
             PacketTag::Subscribe => PacketData::Subscribe(SubscribePacket::deserialize(&mut bytes)?),
             PacketTag::Unsubscribe => PacketData::Unsubscribe(UnsubscribePacket::deserialize(&mut bytes)?),
@@ -129,6 +109,7 @@ impl Packet for PacketMessage {
             PacketTag::AuthoritySwitch => PacketData::AuthoritySwitch(AuthoritySwitchPacket::deserialize(&mut bytes)?),
 
             PacketTag::OrchestratorHello => PacketData::OrchestratorHello(OrchestratorHelloPacket::deserialize(&mut bytes)?),
+            PacketTag::Heartbeat => PacketData::Heartbeat(HeartbeatPacket::deserialize(&mut bytes)?),
         };
         Ok(Self { tag, data })
     }
@@ -152,6 +133,7 @@ impl Packet for PacketMessage {
             PacketData::AuthoritySwitch(data) => data.serialize(&mut buffer)?,
 
             PacketData::OrchestratorHello(data) => data.serialize(&mut buffer)?,
+            PacketData::Heartbeat(data) => data.serialize(&mut buffer)?,
         };
         Ok(buffer.freeze())
     }

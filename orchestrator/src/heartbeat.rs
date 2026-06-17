@@ -1,6 +1,7 @@
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
+use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::game_server::HeartbeatPacket;
 use network_serialization::packets::Packet;
 use crate::AppState;
@@ -17,14 +18,24 @@ pub async fn listen(
         };
 
         match event {
-            Ok(Some(game_sockets::GameNetworkEvent::Message { connection, stream, data })) => {
-                if data.len() < 4 {
-                    println!("Packet too small: {} bytes, skipping", data.len());
-                    continue;
-                }
+            Ok(Some(game_sockets::GameNetworkEvent::Message { connection, stream, data })) =>
+            {
+                let packet_length = data.len();
+                let packet = match PacketMessage::read(data)
+                {
+                    Ok(packet) => packet,
+                    Err(_) =>
+                    {
+                        println!("Packet too small: {} bytes, skipping", packet_length);
+                        continue;
+                    }
+                };
 
-                let bytes = data;
-                let heartbeat = HeartbeatPacket::read(bytes).unwrap(); // Should not fail sine we already checked if it was too small
+                let heartbeat = match packet.data
+                {
+                    PacketData::Heartbeat(heartbeat) => heartbeat,
+                    _ => continue,
+                };
                 println!("heartbeat {:?}", heartbeat);
 
                 redis::cmd("HSET")

@@ -3,6 +3,7 @@ use crate::packets::Packet;
 use crate::Serializable;
 
 use std::net;
+use bytes::Bytes;
 
 #[derive(Debug)]
 pub struct HeartbeatPacket
@@ -15,16 +16,33 @@ pub struct HeartbeatPacket
     pub ram_load: u8,
 }
 
-impl Packet for HeartbeatPacket
+impl Serializable for HeartbeatPacket
 {
-    fn read(mut bytes: bytes::Bytes) -> Result<Self, SerializationError>
+    fn serialize(self, stream: &mut bytes::BytesMut) -> Result<(), SerializationError>
     {
-        let ip = net::Ipv4Addr::deserialize(&mut bytes)?;
-        let port = u16::deserialize(&mut bytes)?;
-        let player_number = u8::deserialize(&mut bytes)?;
-        let player_capacity = u8::deserialize(&mut bytes)?;
-        let cpu_load = u8::deserialize(&mut bytes)?;
-        let ram_load = u8::deserialize(&mut bytes)?;
+        self.ip.serialize(stream)?;
+        self.port.serialize(stream)?;
+        self.player_number.serialize(stream)?;
+        self.player_capacity.serialize(stream)?;
+        self.cpu_load.serialize(stream)?;
+        self.ram_load.serialize(stream)?;
+
+        Ok(())
+    }
+}
+
+impl Deserializable for HeartbeatPacket
+{
+    fn deserialize(bytes: &mut Bytes) -> Result<Self, SerializationError>
+    where
+        Self: Sized
+    {
+        let ip = net::Ipv4Addr::deserialize(bytes)?;
+        let port = u16::deserialize(bytes)?;
+        let player_number = u8::deserialize(bytes)?;
+        let player_capacity = u8::deserialize(bytes)?;
+        let cpu_load = u8::deserialize(bytes)?;
+        let ram_load = u8::deserialize(bytes)?;
 
         Ok(Self
         {
@@ -35,18 +53,5 @@ impl Packet for HeartbeatPacket
             cpu_load,
             ram_load,
         })
-    }
-
-    fn write(self) -> Result<bytes::Bytes, SerializationError>
-    {
-        let mut buffer = bytes::BytesMut::new();
-        self.ip.serialize(&mut buffer)?;
-        self.port.serialize(&mut buffer)?;
-        self.player_number.serialize(&mut buffer)?;
-        self.player_capacity.serialize(&mut buffer)?;
-        self.cpu_load.serialize(&mut buffer)?;
-        self.ram_load.serialize(&mut buffer)?;
-
-        Ok(buffer.freeze())
     }
 }
