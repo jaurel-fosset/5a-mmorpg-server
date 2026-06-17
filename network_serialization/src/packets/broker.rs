@@ -95,7 +95,9 @@ impl Deserializable for ClientInputBrokerPacket {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ClientHelloPacket {}
+pub struct ClientHelloPacket {
+    
+}
 impl Serializable for ClientHelloPacket {
     fn serialize(self, _bytes: &mut BytesMut) -> Result<(), SerializationError> {
         Ok(())

@@ -107,6 +107,11 @@ fn main()
     let mut shard_manager = ShardManager::new();
     let mut entity_manager = EntityManager::new();
 
+    loop {
+        network.poll_once();
+        if network.is_orchestrator_connected() { break; }
+    }
+
     network.request_more_shards(1);
     let mut quad_tree: QuadTree = loop
     {

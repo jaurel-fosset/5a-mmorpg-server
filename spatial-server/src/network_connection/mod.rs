@@ -140,6 +140,7 @@ impl NetworkGlobalState
 
     pub fn request_more_shards(&self, amount: u64)
     {
+        println!("[Spatial] Requesting moreShards: {}", amount);
         let packet = PacketMessage::new(
             PacketData::AllocateShards(AllocateShardsPacket::new(amount))
         );
@@ -148,7 +149,7 @@ impl NetworkGlobalState
         match self.orchestrator.send(bytes)
         {
             Ok(_) => (),
-            Err(_) => (),
+            Err(e) => println!("[Spatial] Error sending to orchestrator: {:?}", e),
         }
     }
 
@@ -206,6 +207,10 @@ impl NetworkGlobalState
     {
         let broker = self.broker.as_ref().ok_or(NetworkError::ConnectionPartiallyInitialised)?;
         broker.send(bytes)
+    }
+
+    pub fn is_orchestrator_connected(&self) -> bool {
+        self.orchestrator.is_connected()
     }
 }
 
@@ -299,6 +304,10 @@ impl OrchestratorConnection
             }
             gs::GameNetworkEvent::StreamClosed(_, _) => None,
         }
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self.connection.is_some() && self.command_stream.is_some()
     }
 }
 

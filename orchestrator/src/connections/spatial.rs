@@ -152,6 +152,7 @@ impl SpatialTask
                             {
                                 PacketData::AllocateShards(allocate_shards) =>
                                     {
+                                        println!("[Spatial] AllocateShards: {:?}", allocate_shards);
                                         match self.event_sender.send(Events::ShardCreationRequest(allocate_shards.shard_count()))
                                         {
                                             Ok(_) => {}
