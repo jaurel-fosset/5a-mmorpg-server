@@ -205,6 +205,18 @@ impl ShardManager
     {
         self.deleted_in_use.keys().copied().next()
     }
+
+    pub fn reset_shards_load(&mut self) {
+        for shard in self.shards.values_mut() {
+            shard.entities_count = 0;
+        }
+    }
+
+    pub fn increment_shard_load(&mut self, shard_id: ShardId) {
+        if let Some(shard) = self.shards.get_mut(&shard_id){
+            shard.entities_count += 1;
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

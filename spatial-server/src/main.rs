@@ -10,6 +10,12 @@ use network_serialization::packets::topic::TopicTree;
 const MAX_AUTHORITY_SWITCH_RANGE: f32 = 100.0;
 
 
+fn update_shard(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity) {
+    let shard_id = entity.current_shard();
+    shard_manager.increment_shard_load(shard_id);
+}
+
+
 fn update_subscription(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
 {
     let entity_position = *entity.position();
@@ -208,9 +214,11 @@ fn main()
                     entity_manager.receive_new_entities(positions);
 
                     println!("entity_manager.entities: {:?}",entity_manager.entities().collect::<Vec<_>>());
+                    shard_manager.reset_shards_load();
 
                     for mut entity in entity_manager.entities()
                     {
+                        update_shard(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                         update_subscription(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                         handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                     }
