@@ -1,3 +1,4 @@
+use crate::inputs::Client;
 use std::net::Ipv4Addr;
 use bevy::app::App;
 use bevy::prelude::*;
@@ -71,6 +72,11 @@ impl BrokerPlugin
                                 let data = &leaf.data;
                                 let mut bytes : Bytes = Bytes::copy_from_slice(data);
                                 let Ok(inputs) = <[InputData;16]>::deserialize(&mut bytes) else {continue;};
+                                
+                                if !input_store.contains_client(client_id)
+                                {
+                                    commands.spawn((Transform::default(), Client::new(client_id)));
+                                }
 
                                 input_store.add_input(client_id, inputs);
                             }

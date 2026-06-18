@@ -1,5 +1,6 @@
 ﻿use std::collections::HashMap;
 use bevy::log::tracing::field::display;
+use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use network_serialization::input::{DirectionFlags, InputData};
 
@@ -63,6 +64,7 @@ impl InputPlugin
 #[derive(Resource)]
 pub struct InputStore
 {
+    connected_clients: HashSet<u32>,
     current_input: HashMap<u32, [InputData; 16]>,
     last_input_sequence: HashMap<u32, u32>,
 }
@@ -73,6 +75,7 @@ impl InputStore
     {
         Self
         {
+            connected_clients: HashSet::new(),
             current_input: HashMap::new(),
             last_input_sequence: HashMap::new(),
         }
@@ -80,7 +83,13 @@ impl InputStore
     
     pub fn add_input(&mut self, id: u32, input_data: [InputData; 16])
     {
+        self.connected_clients.insert(id);
         self.current_input.insert(id, input_data);
+    }
+
+    pub fn contains_client(&self, id: u32) -> bool
+    {
+        self.connected_clients.contains(&id)
     }
 }
 
