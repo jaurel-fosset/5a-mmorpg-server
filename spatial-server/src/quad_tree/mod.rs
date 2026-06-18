@@ -100,7 +100,7 @@ impl QuadTree
                             continue;
                         }
 
-                        if shards_load <= PLAYER_LIMIT
+                        if shards_load >= PLAYER_LIMIT
                         {
                             continue;
                         }
