@@ -175,8 +175,8 @@ fn register_client(
             let mut tree_position = TopicTree::new_empty("position".to_string());
 
             let mut bytes = BytesMut::new();
-            let x : f32 = 25.0;
-            let y : f32 = 25.0;
+            let x : f32 = 20.0;
+            let y : f32 = 20.0;
             x.serialize(&mut bytes).unwrap();
             y.serialize(&mut bytes).unwrap();
             tree_position.add_leaf(new_client_id.to_string(), Vec::<u8>::from(bytes));
@@ -312,7 +312,7 @@ fn publish_shard_state(
     connection_data: ConnectionData,
     packet: PublishPacket,
 ){
-    println!("Publish Shard");
+    //println!("Publish Shard");
     register_shard(state, connection_data);
 
     for (client, keys) in &state.client_to_subscribed_keys {
@@ -335,7 +335,7 @@ fn publish_shard_state(
 
         if topics_to_send.len() == 0 {continue;}
         let Some(connection) = state.client_to_connection.get(client) else { continue; };
-        println!("on s'apprête à envoyer de la donnée à connection {:?}",&connection.connection);
+        //println!("on s'apprête à envoyer de la donnée à connection {:?}",&connection.connection);
         let packet = PacketMessage::new(
             PacketData::Broadcast(
                 BroadcastPacket{ data:topics_to_send },

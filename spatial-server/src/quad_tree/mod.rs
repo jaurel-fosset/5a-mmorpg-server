@@ -33,7 +33,7 @@ enum QuadTreeNodeType
 }
 
 
-const PLAYER_LIMIT: usize = 100;
+const PLAYER_LIMIT: usize = 2;
 
 impl QuadTree
 {
@@ -100,7 +100,7 @@ impl QuadTree
                             continue;
                         }
 
-                        if shards_load >= PLAYER_LIMIT
+                        if shards_load <= PLAYER_LIMIT
                         {
                             continue;
                         }
@@ -116,7 +116,7 @@ impl QuadTree
                         None => continue,
                     };
 
-                    if entity_count < PLAYER_LIMIT
+                    if entity_count > PLAYER_LIMIT
                     {
                         self.split_leaf(current_node, shard_manager, entities);
                         shard_allocation_count += 3;

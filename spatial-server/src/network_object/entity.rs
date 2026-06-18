@@ -1,17 +1,17 @@
 ﻿use crate::geometry::prelude as geo;
 use crate::network_object::shard::ShardId;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub struct EntityManager
 {
-    entities: Vec<Entity>,
+    entities: HashMap<EntityId,Entity>,
 }
 
 impl EntityManager
 {
     pub fn new() -> Self
     {
-        EntityManager { entities: Vec::new() }
+        EntityManager { entities: HashMap::new() }
     }
 
     pub fn receive_new_entities<T>(&mut self, entities: T)
@@ -20,18 +20,18 @@ impl EntityManager
     {
         let entities = entities.into_iter()
             .map(|(entity_id, pos, shard_id)| {
-                Entity::new(entity_id, pos, shard_id)
+                (entity_id, Entity::new(entity_id, pos, shard_id))
             });
         self.entities.extend(entities);
     }
 
-    pub fn entities(&mut self) -> &mut [Entity]
+    pub fn entities(&mut self) -> impl Iterator<Item=Entity>
     {
-        self.entities.as_mut_slice()
+        self.entities.values().cloned()
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Entity
 {
     id: EntityId,

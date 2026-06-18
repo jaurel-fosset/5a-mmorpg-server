@@ -34,7 +34,7 @@ fn update_subscription(network_manager: &mut NetworkGlobalState, quad_tree: &mut
 
     for shard in removed_shard
     {
-        let mut positions = TopicTree::new_empty("positions".to_string());
+        let mut positions = TopicTree::new_empty("position".to_string());
         positions.add_leaf(format!("{}", entity.id().0), Vec::new());
 
         let mut entities = TopicTree::new_empty("entities".to_string());
@@ -207,16 +207,21 @@ fn main()
 
                     entity_manager.receive_new_entities(positions);
 
-                    for entity in entity_manager.entities()
+                    println!("entity_manager.entities: {:?}",entity_manager.entities().collect::<Vec<_>>());
+
+                    for mut entity in entity_manager.entities()
                     {
-                        update_subscription(&mut network, &mut quad_tree, &mut shard_manager, entity);
-                        handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, entity);
+                        update_subscription(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
+                        handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                     }
 
+                    let vec_entity = entity_manager.entities().collect::<Vec<_>>();
                     let shards_to_allocate = quad_tree
-                        .split_and_fuse(&mut shard_manager, entity_manager.entities());
+                        .split_and_fuse(&mut shard_manager, vec_entity.as_slice());
 
-                    network.request_more_shards(shards_to_allocate as u64);
+                    if shards_to_allocate != 0 {
+                        network.request_more_shards(shards_to_allocate as u64);
+                    }
                 }
             }
         }

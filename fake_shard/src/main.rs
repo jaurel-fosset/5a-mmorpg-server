@@ -6,13 +6,13 @@ use game_sockets::{
 use network_serialization::{Deserializable, Serializable};
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::Packet;
-use network_serialization::packets::broker::{PublishPacket};
+use network_serialization::packets::broker::{ClientHelloPacket, NetworkId, PublishPacket, SubscribePacket};
 use network_serialization::packets::topic::{TopicTree, TopicTreeType};
 use std::time::{Duration, Instant};
 
 #[derive(Default)]
 struct ShardState {
-    data_position: HashMap<u32, [i32;2]>,
+    data_position: HashMap<u32, [f32;2]>,
     last_input_sequence: HashMap<u32, u32>,
 }
 
@@ -42,6 +42,35 @@ fn main() {
         }
         std::thread::sleep(Duration::from_millis(10));
     };
+
+    let bytes = PacketMessage::new(
+        PacketData::ClientHello(
+            ClientHelloPacket{
+                client_type: NetworkId::Shard
+            }
+        )
+    ).write().unwrap();
+
+    peer.send(&conn,&stream,bytes).unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+
+    let mut tree_entities = TopicTree::new_empty("entities".to_string());
+    let mut tree_input = TopicTree::new_empty("input".to_string());
+    tree_input.add_leaf("*".to_string(),Vec::new());
+    tree_entities.add_tree(tree_input);
+
+    let bytes = PacketMessage::new(
+        PacketData::Subscribe(
+            SubscribePacket{
+                client_id: 2,
+                topic: tree_entities,
+            }
+        )
+    ).write().unwrap();
+
+    peer.send(&conn,&stream,bytes).unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+
 
     let tick_duration = Duration::from_millis(66);
 
@@ -103,7 +132,7 @@ fn move_entity(
     client_id: u32,
     inputs: [InputData; 16],
 ) {
-    let position = shard_state.data_position.entry(client_id).or_insert([0, 0]);
+    let position = shard_state.data_position.entry(client_id).or_insert([20f32, 20f32]);
     let last_sequence = shard_state.last_input_sequence.entry(client_id).or_insert(0);
 
     //println!("Position: {:?}, Input: {:?}", position, last_sequence);
@@ -115,16 +144,16 @@ fn move_entity(
             if input.input.is_empty() {continue;}
 
             if input.input.contains(DirectionFlags::UP) {
-                position[0] += 10 ;
+                position[0] += 10f32 ;
             }
             if input.input.contains(DirectionFlags::DOWN) {
-                position[0] -= 10 ;
+                position[0] -= 10f32 ;
             }
             if input.input.contains(DirectionFlags::LEFT) {
-                position[1] -= 10 ;
+                position[1] -= 10f32 ;
             }
             if input.input.contains(DirectionFlags::RIGHT) {
-                position[1] += 10 ;
+                position[1] += 10f32 ;
             }
         }
     }
@@ -136,7 +165,8 @@ fn build_entities_tree(shard_state: &ShardState) -> TopicTree {
     let mut tree_position = TopicTree::new_empty("position".to_string());
     for (key, value) in shard_state.data_position.iter() {
         let mut bytes = BytesMut::new();
-        let _ = value.serialize(&mut bytes);
+        let _ = value[0].serialize(&mut bytes);
+        let _ = value[1].serialize(&mut bytes);
         tree_position.add_leaf(key.to_string(), Vec::<u8>::from(bytes));
     }
 
