@@ -118,8 +118,15 @@ impl QuadTree
 
                     if entity_count > PLAYER_LIMIT
                     {
-                        self.split_leaf(current_node, shard_manager, entities);
-                        shard_allocation_count += 3;
+                        match self.split_leaf(current_node, shard_manager, entities) {
+                            None => {
+                                println!("split_leaf failed");
+                                shard_allocation_count += 3;
+                            }
+                            Some(_) => {
+                                println!("split_leaf successful");
+                            }
+                        }
                     }
                 }
             }

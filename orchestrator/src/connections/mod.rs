@@ -20,8 +20,8 @@ async fn init_connection(ip: Ipv4Addr, port: u16, orchestrator_ip: Ipv4Addr, red
         gs::GamePeer::new(backend)
     };
 
-    println!("Connecting to {}:{}...", ip, port);
     socket.connect(&ip.to_string(), port).unwrap();
+
     let connection = loop
     {
         if let Ok(Some(game_sockets::GameNetworkEvent::Connected(conn))) = socket.poll()
@@ -30,6 +30,7 @@ async fn init_connection(ip: Ipv4Addr, port: u16, orchestrator_ip: Ipv4Addr, red
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     };
+    println!("Connected to {}:{}", ip, port);
 
     socket.create_stream(connection.clone(), game_sockets::GameStreamReliability::Unreliable).unwrap();
     let stream: game_sockets::GameStream = loop

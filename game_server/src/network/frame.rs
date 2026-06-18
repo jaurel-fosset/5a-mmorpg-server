@@ -8,7 +8,7 @@ use network_serialization::Serializable;
 use crate::inputs::Client;
 use crate::network::broker::BrokerPeer;
 
-struct FramePlugin;
+pub struct FramePlugin;
 
 impl Plugin for FramePlugin
 {
@@ -20,9 +20,17 @@ impl Plugin for FramePlugin
 
 impl FramePlugin
 {
-    fn send_frame(broker: Res<BrokerPeer>, clients: Query<(&Client, &Transform)>)
+    fn send_frame(broker: Option<Res<BrokerPeer>>, clients: Query<(&Client, &Transform)>)
     {
-        let frame =  Self::make_frame(clients);
+        let broker = match broker {
+            None => return,
+            Some(broker) => broker,
+        };
+
+        let frame = match Self::make_frame(clients) {
+            Some(frame) => frame,
+            None => return,
+        };
 
         let packet = PacketMessage::new(PacketData::Publish(PublishPacket {
             data: vec![frame],
@@ -39,8 +47,12 @@ impl FramePlugin
         }
     }
 
-    fn make_frame(clients: Query<(&Client, &Transform)>) -> TopicTree
+    fn make_frame(clients: Query<(&Client, &Transform)>) -> Option<TopicTree>
     {
+        if clients.is_empty() {
+            return None;
+        }
+
         let mut tree_entities = TopicTree::new_empty("entities".to_string());
         // Position
         let mut tree_position = TopicTree::new_empty("position".to_string());
@@ -55,6 +67,6 @@ impl FramePlugin
         }
 
         tree_entities.add_tree(tree_position);
-        tree_entities
+        Some(tree_entities)
     }
 }

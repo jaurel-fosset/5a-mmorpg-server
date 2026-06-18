@@ -13,7 +13,7 @@ use network_serialization::packets::topic::TopicTreeType;
 use crate::inputs::InputStore;
 use crate::network::{orchestrator, NetworkUpdate};
 
-struct BrokerPlugin;
+pub struct BrokerPlugin;
 
 impl Plugin for BrokerPlugin
 {
@@ -75,7 +75,7 @@ impl BrokerPlugin
                                 
                                 if !input_store.contains_client(client_id)
                                 {
-                                    commands.spawn((Transform::default(), Client::new(client_id)));
+                                    commands.spawn((Transform::from_xyz(2f32,2f32,0f32), Client::new(client_id)));
                                 }
 
                                 input_store.add_input(client_id, inputs);

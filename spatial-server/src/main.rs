@@ -132,7 +132,6 @@ fn main()
             {
                 NetworkEvent::ShardsUpdate(created_shards, destroyed_shards) =>
                 {
-                    network.reset_timer();
                     for shard in created_shards
                     {
                         shard_manager.on_receive_shard_creation(shard);
@@ -211,9 +210,10 @@ fn main()
                             Some((entity_id, position, shard_id))
                         });
 
-                    entity_manager.receive_new_entities(positions);
+                    entity_manager.receive_new_entities(&mut network,positions);
 
-                    println!("entity_manager.entities: {:?}",entity_manager.entities().collect::<Vec<_>>());
+                    //println!("entity_manager.entities: {:?}",entity_manager.entities().collect::<Vec<_>>());
+                    
                     shard_manager.reset_shards_load();
 
                     for mut entity in entity_manager.entities()
@@ -238,7 +238,8 @@ fn main()
 
         let work_duration = start_time.elapsed();
         if let Some(sleep_duration) = tick_duration.checked_sub(work_duration) {
-            std::thread::sleep(sleep_duration);
+            //std::thread::sleep(sleep_duration);
+
         } else {
             println!("LAG: work took {}ms", work_duration.as_millis());
         }

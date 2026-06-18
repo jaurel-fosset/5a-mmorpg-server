@@ -10,8 +10,9 @@ use game_sockets;
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::Packet;
 use crate::env_parameter::Environment;
-use crate::network::broker::BrokerPeer;
+use crate::network::broker::{BrokerPeer, BrokerPlugin};
 use crate::network::client::{ClientHandlingPlugin, ConnectingClients};
+use crate::network::frame::FramePlugin;
 use crate::network::heartbeat::HeartbeatNetworkPlugin;
 use crate::network::orchestrator::{HeartbeatStreamFactory, OrchestratorHandlingPlugin};
 
@@ -122,7 +123,9 @@ impl Plugin for NetworkPluginGroup
 
         app
             .add_plugins(OrchestratorHandlingPlugin)
+            .add_plugins(BrokerPlugin)
             .add_plugins(ClientHandlingPlugin)
+            .add_plugins(FramePlugin)
             .add_plugins(HeartbeatNetworkPlugin)
             .add_systems(Startup, Self::listen)
             .add_systems(NetworkUpdate, Self::get_packets)

@@ -4,7 +4,7 @@ use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use network_serialization::input::{DirectionFlags, InputData};
 
-struct InputPlugin;
+pub struct InputPlugin;
 
 impl Plugin for InputPlugin
 {
@@ -22,7 +22,10 @@ impl InputPlugin
     {
         for (client, mut transform) in clients.iter_mut()
         {
-            let inputs = *inputs_store.current_input.get(&client.id).unwrap();
+            let inputs = match inputs_store.current_input.get(&client.id) {
+                Some(inputs) => *inputs,
+                None => continue,
+            };
             let last_sequence = inputs_store.last_input_sequence.entry(client.id)
                 .or_insert(0);
 
@@ -37,11 +40,11 @@ impl InputPlugin
 
                     if input.input.contains(DirectionFlags::UP)
                     {
-                        transform.translation.y -= 10.0;
+                        transform.translation.y += 10.0;
                     }
                     if input.input.contains(DirectionFlags::DOWN)
                     {
-                        transform.translation.y += 10.0;
+                        transform.translation.y -= 10.0;
                     }
                     if input.input.contains(DirectionFlags::LEFT)
                     {
@@ -55,6 +58,7 @@ impl InputPlugin
             }
 
             info!("Client {} position : x = {}, y = {}", client.id, transform.translation.x, transform.translation.y);
+            println!("Client {} position : x = {}, y = {}", client.id, transform.translation.x, transform.translation.y);
         }
 
         inputs_store.current_input.clear();

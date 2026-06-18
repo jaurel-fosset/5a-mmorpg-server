@@ -175,8 +175,8 @@ fn register_client(
             let mut tree_position = TopicTree::new_empty("position".to_string());
 
             let mut bytes = BytesMut::new();
-            let x : f32 = 20.0;
-            let y : f32 = 20.0;
+            let x : f32 = 0.1;
+            let y : f32 = 0.1;
             x.serialize(&mut bytes).unwrap();
             y.serialize(&mut bytes).unwrap();
             tree_position.add_leaf(new_client_id.to_string(), Vec::<u8>::from(bytes));

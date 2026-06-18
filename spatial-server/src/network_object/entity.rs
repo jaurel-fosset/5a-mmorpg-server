@@ -1,6 +1,8 @@
 ﻿use crate::geometry::prelude as geo;
 use crate::network_object::shard::ShardId;
 use std::collections::{HashMap, HashSet};
+use network_serialization::packets::topic::TopicTree;
+use crate::network_connection::NetworkGlobalState;
 
 pub struct EntityManager
 {
@@ -14,7 +16,7 @@ impl EntityManager
         EntityManager { entities: HashMap::new() }
     }
 
-    pub fn receive_new_entities<T>(&mut self, entities: T)
+    pub fn receive_new_entities<T>(&mut self, network_manager: &mut NetworkGlobalState,entities: T)
     where
         T: IntoIterator<Item=(EntityId, geo::Position, ShardId)>
     {
@@ -22,7 +24,22 @@ impl EntityManager
             .map(|(entity_id, pos, shard_id)| {
                 (entity_id, Entity::new(entity_id, pos, shard_id))
             });
-        self.entities.extend(entities);
+
+        for (id,entity) in entities {
+            if !self.entities.contains_key(&id) {
+                let mut input = TopicTree::new_empty("input".to_string());
+                input.add_leaf(id.0.to_string(), Vec::new());
+
+                let mut entities = TopicTree::new_empty("entities".to_string());
+                entities.add_tree(input);
+
+                match network_manager.subscribe(entity.current_shard.id(), entities) {
+                    Ok(_) => (),
+                    Err(_) => (),
+                };
+            }
+            self.entities.insert(id,entity);
+        }
     }
 
     pub fn entities(&mut self) -> impl Iterator<Item=Entity>

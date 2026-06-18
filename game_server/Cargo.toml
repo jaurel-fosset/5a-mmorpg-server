@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = {workspace = true}
+bevy = {workspace = true, features = ["debug"]}
 game_sockets = {workspace = true}
 thiserror = { workspace = true }
 network_serialization = { path="../network_serialization" }

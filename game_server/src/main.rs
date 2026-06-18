@@ -1,3 +1,4 @@
+use game_server::inputs::InputPlugin;
 use bevy::diagnostic;
 use bevy::diagnostic::DiagnosticsPlugin;
 use bevy::prelude::*;
@@ -16,5 +17,6 @@ fn main()
         .add_plugins(EnvParameterPlugin)
         .add_plugins(StartupSystemInfoPlugin)
         .add_plugins(NetworkPluginGroup)
+        .add_plugins(InputPlugin)
         .run();
 }
