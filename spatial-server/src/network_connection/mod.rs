@@ -120,8 +120,6 @@ impl NetworkGlobalState
                 }
             }
         };
-
-        println!("Polled orchestrator");
         
 
         let broker = match self.broker
