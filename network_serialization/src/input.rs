@@ -12,7 +12,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Default)]
+#[derive(Debug, PartialEq, Clone, Copy, Default)]
 pub struct InputData {
     pub sequence: u32,
     pub input: DirectionFlags,

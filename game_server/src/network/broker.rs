@@ -1,15 +1,91 @@
 use std::net::Ipv4Addr;
 use bevy::app::App;
 use bevy::prelude::*;
+use bytes::Bytes;
 use game_sockets::{GameConnection, GamePeer, GameSocketError, GameStream};
+use network_serialization::Deserializable;
+use network_serialization::input::InputData;
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::broker::{ClientHelloPacket, NetworkId};
 use network_serialization::packets::Packet;
+use network_serialization::packets::topic::TopicTreeType;
+use crate::inputs::InputStore;
+use crate::network::{orchestrator, NetworkUpdate};
 
 struct BrokerPlugin;
 
-impl Plugin for BrokerPlugin {
-    fn build(&self, app: &mut App) {}
+impl Plugin for BrokerPlugin
+{
+    fn build(&self, app: &mut App)
+    {
+        app.add_systems(NetworkUpdate, Self::receive_position);
+    }
+}
+
+impl BrokerPlugin
+{
+    fn receive_position(mut commands: Commands, broker: Option<ResMut<BrokerPeer>>, mut input_store: ResMut<InputStore>)
+    {
+        let mut broker = match broker
+        {
+            Some(broker) => broker,
+            None => return,
+        };
+
+        while let Some(event) = broker.game_peer.poll().transpose()
+        {
+            let event = match event
+            {
+                Ok(event) => event,
+                Err(error) =>
+                    {
+                        error!("Broker : Error with a received packet : {}", error);
+                        continue;
+                    },
+            };
+
+            match event
+            {
+                game_sockets::GameNetworkEvent::Connected(connection) =>
+                {
+                }
+                game_sockets::GameNetworkEvent::Disconnected(_) => {}
+                game_sockets::GameNetworkEvent::Message { data, .. } =>
+                {
+                    let msg = PacketMessage::read(data).unwrap();
+                    match msg.data
+                    {
+                        PacketData::Broadcast(packet) => for tree in packet.data
+                        {
+                            // On récupère les inputs
+                            let Some(input_tree) = tree.get_child("input") else { break; };
+                            let TopicTreeType::Node(input_topic_node) = &input_tree.item else { break; };
+
+                            for topic_tree in &input_topic_node.data
+                            {
+                                let TopicTreeType::Leaf(leaf) = &topic_tree.item else { continue; };
+                                println!("topic_tree.name: {:?}", topic_tree.name);
+
+                                let Ok(client_id) = topic_tree.name.parse::<u32>() else { continue; };
+
+                                let data = &leaf.data;
+                                let mut bytes : Bytes = Bytes::copy_from_slice(data);
+                                let Ok(inputs) = <[InputData;16]>::deserialize(&mut bytes) else {continue;};
+
+                                input_store.add_input(client_id, inputs);
+                            }
+                        },
+                        _ => {}
+                    }
+                }
+                game_sockets::GameNetworkEvent::Error { .. } => {}
+                game_sockets::GameNetworkEvent::StreamCreated(connection, stream) =>
+                {
+                }
+                game_sockets::GameNetworkEvent::StreamClosed(_, _) => {}
+            }
+        }
+    }
 }
 
 #[derive(Debug, Resource)]
@@ -21,7 +97,7 @@ pub struct BrokerPeer {
 
 impl BrokerPeer
 {
-    fn send(&self, bytes: bytes::Bytes) -> Result<(), BrokerPeerError> {
+    pub(crate) fn send(&self, bytes: bytes::Bytes) -> Result<(), BrokerPeerError> {
         self.game_peer.send(&self.connection, &self.stream, bytes)
             .map_err(|_| BrokerPeerError::SendFail)?;
 
@@ -29,8 +105,10 @@ impl BrokerPeer
     }
 }
 
-impl BrokerPeer {
-    pub fn new(broker_ip: Ipv4Addr) -> Self {
+impl BrokerPeer
+{
+    pub fn new(broker_ip: Ipv4Addr) -> Self
+    {
         let backend = game_sockets::protocols::QuicBackend::new();
         let mut peer = game_sockets::GamePeer::new(backend);
         peer.connect(&broker_ip.to_string(), 10_001)
@@ -53,7 +131,8 @@ impl BrokerPeer {
             }
         };
 
-        Self {
+        Self
+        {
             game_peer: peer,
             connection,
             stream,

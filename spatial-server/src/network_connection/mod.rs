@@ -120,6 +120,8 @@ impl NetworkGlobalState
                 }
             }
         };
+
+        println!("Polled orchestrator");
         
 
         let broker = match self.broker
@@ -193,7 +195,7 @@ impl NetworkGlobalState
 
         match self.orchestrator.send(bytes)
         {
-            Ok(_) => (),
+            Ok(_) => println!("Sent command to orchestrator"),
             Err(e) => println!("[Spatial] Error sending to orchestrator: {:?}", e),
         }
     }

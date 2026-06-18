@@ -20,17 +20,19 @@ async fn init_connection(ip: Ipv4Addr, port: u16, orchestrator_ip: Ipv4Addr, red
         gs::GamePeer::new(backend)
     };
 
-    println!("Connecting to {}:{}", ip, port);
+    println!("Connecting to {}:{}...", ip, port);
     socket.connect(&ip.to_string(), port).unwrap();
-
+    println!("Connecting to {}:{}...", ip, port);
     let connection = loop
     {
         if let Ok(Some(game_sockets::GameNetworkEvent::Connected(conn))) = socket.poll()
         {
             break conn;
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::task::yield_now().await;
+        //tokio::time::sleep(Duration::from_millis(10)).await;
     };
+    println!("Connected to {}:{}", ip, port);
 
     socket.create_stream(connection.clone(), game_sockets::GameStreamReliability::Unreliable).unwrap();
     let stream: game_sockets::GameStream = loop
@@ -55,6 +57,7 @@ async fn init_connection(ip: Ipv4Addr, port: u16, orchestrator_ip: Ipv4Addr, red
         )
     ).write().unwrap();
     socket.send(&connection, &stream, hello_packet).unwrap();
+    println!("Sent hello to {}:{}", ip, port);
 
     (socket, connection, stream)
 }
@@ -71,5 +74,7 @@ async fn get_docker_ip(docker: &mut Docker, id: &str) -> Ipv4Addr
         .get("mmorpg-server_default").unwrap()
         .ip_address.clone().unwrap();
 
-    Ipv4Addr::from_str(&ip_string).unwrap()
+    // Ipv4Addr::from_str(&ip_string).unwrap()
+
+    Ipv4Addr::new(127, 0, 0, 1)
 }
