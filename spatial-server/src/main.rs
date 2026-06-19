@@ -224,11 +224,19 @@ fn main()
                     }
 
                     let vec_entity = entity_manager.entities().collect::<Vec<_>>();
-                    let shards_to_allocate = quad_tree
+                    let (shards_to_allocate, has_split_or_fused) = quad_tree
                         .split_and_fuse(&mut shard_manager, vec_entity.as_slice());
 
                     if shards_to_allocate != 0 {
                         network.request_more_shards(shards_to_allocate as u64);
+                    }
+
+                    if has_split_or_fused
+                    {
+                        for mut entity in entity_manager.entities()
+                        {
+                            handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
+                        }
                     }
                 }
             }

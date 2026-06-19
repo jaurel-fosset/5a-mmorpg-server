@@ -46,9 +46,10 @@ impl QuadTree
         }
     }
 
-    pub fn split_and_fuse(&mut self, shard_manager: &mut ShardManager, entities: &[Entity]) -> usize
+    pub fn split_and_fuse(&mut self, shard_manager: &mut ShardManager, entities: &[Entity]) -> (usize, bool)
     {
         let mut shard_allocation_count = 0;
+        let mut has_split_or_fused = false;
         let mut node_to_visit = vec![self.root];
         
         while let Some(current_node) = node_to_visit.pop()
@@ -106,6 +107,7 @@ impl QuadTree
                         }
                         
                         self.fuse(current_node, shard_manager, shards_load);
+                        has_split_or_fused = true;
                     }
                 }
                 QuadTreeNodeType::Leaf(_) =>
@@ -128,14 +130,15 @@ impl QuadTree
                             }
                             Some(_) => {
                                 println!("split_leaf successful");
+                                has_split_or_fused = true;
                             }
                         }
                     }
                 }
             }
         }
-        
-        shard_allocation_count
+
+        (shard_allocation_count, has_split_or_fused)
     }
     
     fn get_entity_count(&mut self, shard_manager: &mut ShardManager, leaf: usize) -> Option<usize>
