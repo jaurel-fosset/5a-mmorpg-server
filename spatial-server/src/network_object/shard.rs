@@ -6,10 +6,10 @@ use thiserror;
 
 pub struct ShardManager
 {
-    shards: HashMap<ShardId, Shard>,
+    pub(crate) shards: HashMap<ShardId, Shard>,
     deleted_in_use: HashMap<ShardId, (time::Instant, Shard)>,
     replaced_shards: HashMap<ShardId, ShardId>,
-    free_shards: HashMap<ShardId, time::Instant>,
+    pub(crate) free_shards: HashMap<ShardId, time::Instant>,
 }
 
 const MAX_IDLE_TIME: time::Duration = time::Duration::from_secs(10);
@@ -136,7 +136,6 @@ impl ShardManager
     pub fn on_receive_shard_creation(&mut self, shard_address: u32)
     {
         let shard_id = ShardId::new(shard_address);
-        println!("Shard id {}", shard_id);
 
         match self.get_deleted_in_use_shard()
         {
@@ -198,7 +197,16 @@ impl ShardManager
 
     fn get_free_shard(&self) -> Option<ShardId>
     {
-        self.free_shards.keys().copied().next()
+        match self.free_shards.keys().copied().next() {
+            Some(shard_id) => {
+                println!("Shard id {} pour free_shard", shard_id);
+                Some(shard_id)
+            },
+            None => {
+                println!("No shard ids available");
+                None
+            }
+        }
     }
 
     fn get_deleted_in_use_shard(&self) -> Option<ShardId>

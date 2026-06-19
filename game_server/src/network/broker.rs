@@ -65,7 +65,7 @@ impl BrokerPlugin
                             for topic_tree in &input_topic_node.data
                             {
                                 let TopicTreeType::Leaf(leaf) = &topic_tree.item else { continue; };
-                                println!("topic_tree.name: {:?}", topic_tree.name);
+                                //println!("topic_tree.name: {:?}", topic_tree.name);
 
                                 let Ok(client_id) = topic_tree.name.parse::<u32>() else { continue; };
 

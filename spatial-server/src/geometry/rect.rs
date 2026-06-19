@@ -1,6 +1,6 @@
 ﻿use super::prelude::*;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Rect
 {
     pub x: f32,

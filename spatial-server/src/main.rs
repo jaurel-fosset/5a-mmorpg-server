@@ -12,6 +12,7 @@ const MAX_AUTHORITY_SWITCH_RANGE: f32 = 100.0;
 
 fn update_shard(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity) {
     let shard_id = entity.current_shard();
+    println!("entity {:?} est dans le shard {}",entity.id(), shard_id);
     shard_manager.increment_shard_load(shard_id);
 }
 
@@ -198,7 +199,6 @@ fn main()
                 }
                 NetworkEvent::PositionUpdate(entity_positions) =>
                 {
-                    println!("Position updated!");
                     let positions = entity_positions
                         .into_iter()
                         .flat_map(|pos|

@@ -1,4 +1,5 @@
-﻿use bevy::prelude::*;
+﻿use std::time::Duration;
+use bevy::prelude::*;
 use bytes::BytesMut;
 use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::broker::PublishPacket;
@@ -8,20 +9,40 @@ use network_serialization::Serializable;
 use crate::inputs::Client;
 use crate::network::broker::BrokerPeer;
 
+#[derive(Resource)]
+struct FrameTimer(Timer);
+
+impl Default for FrameTimer {
+    fn default() -> Self {
+        Self(Timer::new(Duration::from_millis(66), TimerMode::Repeating))
+    }
+}
+
 pub struct FramePlugin;
 
 impl Plugin for FramePlugin
 {
     fn build(&self, app: &mut App)
     {
-        app.add_systems(Last, Self::send_frame);
+        app
+            .init_resource::<FrameTimer>()
+            .add_systems(Last, Self::send_frame);
     }
 }
 
 impl FramePlugin
 {
-    fn send_frame(broker: Option<Res<BrokerPeer>>, clients: Query<(&Client, &Transform)>)
+    fn send_frame(
+        time: Res<Time>,
+        mut timer: ResMut<FrameTimer>,
+        broker: Option<Res<BrokerPeer>>,
+        clients: Query<(&Client, &Transform)>
+    )
     {
+        if !timer.0.tick(time.delta()).just_finished() {
+            return;
+        }
+
         let broker = match broker {
             None => return,
             Some(broker) => broker,

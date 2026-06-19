@@ -118,6 +118,9 @@ impl QuadTree
 
                     if entity_count > PLAYER_LIMIT
                     {
+
+                        println!("free_shards count: {:?}", shard_manager.free_shards);
+                        println!("shards count: {}", shard_manager.shards.len());
                         match self.split_leaf(current_node, shard_manager, entities) {
                             None => {
                                 println!("split_leaf failed");
@@ -186,6 +189,12 @@ impl QuadTree
             QuadTreeNodeType::Leaf(shard) => shard,
             QuadTreeNodeType::Node(_) => return None,
         };
+
+        if shard_manager.free_shards.iter().count() < 3 {
+            println!("Pas assez de shards libres: {:?}", shard_manager.free_shards.iter().count());
+            return None;
+        }
+
         shard_manager.release_shard(old_shard_id);
         
         let quadrants =
