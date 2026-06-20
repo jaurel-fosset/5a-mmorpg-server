@@ -95,12 +95,12 @@ fn authority_switch(
     connection_data: ConnectionData,
     packet: AuthoritySwitchPacket
 ) {
-    let client_id = packet.client;
+    let entity_id = packet.client;
     let new_shard = packet.new_shard;
     let old_shard = packet.old_shard;
 
-    let input_key = format!("entities/input/{}", client_id).into_bytes();
-    let position_key = format!("entities/position/{}", client_id).into_bytes();
+    let input_key = format!("entities/input/{}", entity_id).into_bytes();
+    let position_key = format!("entities/position/{}", entity_id).into_bytes();
 
     // Modifie new_shard
     let new_shard_keys = state.client_to_subscribed_keys.entry(new_shard).or_insert(Vec::new());
@@ -112,29 +112,87 @@ fn authority_switch(
     old_shard_keys.push(position_key.clone());
     old_shard_keys.retain(|x| *x != input_key);
 
-    let mut tree_entities = TopicTree::new_empty("entities".to_string());
-    // Position
-    let mut tree_position = TopicTree::new_empty("position".to_string());
+    authority_gain(state, packet.new_shard, entity_id, packet.x, packet.y);
+    authority_loss(state, packet.old_shard, entity_id);
+}
 
-    let mut bytes = BytesMut::new();
-    let _ = packet.x.serialize(&mut bytes);
-    let _ = packet.y.serialize(&mut bytes);
+fn authority_gain(state: &mut BrokerState, new_shard: u32, entity_id: u32, position_x: f32, position_y: f32)
+{
+    let authority_gain_packet =
+    {
+        let mut tree_authority = TopicTree::new_empty("authority".to_string());
+        let mut tree_authority_gain = TopicTree::new_empty("gain".to_string());
 
-    tree_position.add_leaf(client_id.to_string(), Vec::<u8>::from(bytes));
-    tree_entities.add_tree(tree_position);
+        let mut bytes = BytesMut::new();
+        entity_id.serialize(&mut bytes).unwrap();
+        position_x.serialize(&mut bytes).unwrap();
+        position_y.serialize(&mut bytes).unwrap();
 
-    let connection_data = &state.client_to_connection[&new_shard];
-    let packet = PacketMessage::new(
-        PacketData::Broadcast(
-            BroadcastPacket{
-                data: vec!(tree_entities)
+        tree_authority_gain.add_leaf(entity_id.to_string(), Vec::<u8>::from(bytes));
+        tree_authority.add_tree(tree_authority_gain);
+
+        PacketMessage::new
+        (
+            PacketData::Broadcast
+            (
+                BroadcastPacket { data: vec![tree_authority] }
+            )
+        ).write().unwrap()
+    };
+
+    let new_shard_connection = state.client_to_connection.get(&new_shard);
+    match new_shard_connection
+    {
+        Some(connection_data) =>
+        {
+            if let Err(error) = state.game_peer.send(&connection_data.connection, &connection_data.stream, authority_gain_packet)
+            {
+                println!("Failed to send authority gain to {:?}, because of : {}",
+                         connection_data.connection, error);
             }
-        ),
-    );
+        }
+        None =>
+        {
+            println!("Failed to send authority gain, no connection for client id {}", new_shard);
+        },
+    }
+}
 
-    let bytes: Bytes = packet.write().unwrap();
+fn authority_loss(state: &mut BrokerState, old_shard: u32, entity_id: u32)
+{
+    let authority_loss_packet =
+    {
+        let mut tree_authority = TopicTree::new_empty("authority".to_string());
+        let mut tree_authority_gain = TopicTree::new_empty("loss".to_string());
 
-    state.game_peer.send(&connection_data.connection,&connection_data.stream,bytes).unwrap();
+        tree_authority_gain.add_leaf(entity_id.to_string(), Vec::new());
+        tree_authority.add_tree(tree_authority_gain);
+
+        PacketMessage::new
+        (
+            PacketData::Broadcast
+            (
+                BroadcastPacket { data: vec![tree_authority] }
+            )
+        ).write().unwrap()
+    };
+
+    let new_shard_connection = state.client_to_connection.get(&old_shard);
+    match new_shard_connection
+    {
+        Some(connection_data) =>
+        {
+            if let Err(error) = state.game_peer.send(&connection_data.connection, &connection_data.stream, authority_loss_packet)
+            {
+                println!("Failed to send authority loss to {:?}, because of : {}",
+                         connection_data.connection, error);
+            }
+        }
+        None =>
+        {
+            println!("Failed to send authority loss, no connection for client id {}", old_shard);
+        },
+    }
 }
 
 fn register_connection(
