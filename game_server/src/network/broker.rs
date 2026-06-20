@@ -11,6 +11,7 @@ use network_serialization::packet::{PacketData, PacketMessage};
 use network_serialization::packets::broker::{ClientHelloPacket, NetworkId};
 use network_serialization::packets::Packet;
 use network_serialization::packets::topic::TopicTreeType;
+use crate::client;
 use crate::inputs::InputStore;
 use crate::network::{orchestrator, NetworkUpdate};
 
@@ -86,7 +87,7 @@ impl BrokerPlugin
                                         transform.translation.y = y;
                                     } else {
                                         // L'entité n'existe pas → spawn à la bonne position
-                                        commands.spawn((Transform::from_xyz(x, y, 0f32), Client::new(client_id)));
+                                        commands.spawn((Transform::from_xyz(x, y, 0f32), Client::new(client_id), client::NotAuthoritative));
                                     }
                                 }
                             }

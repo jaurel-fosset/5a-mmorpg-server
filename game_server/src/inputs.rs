@@ -4,6 +4,8 @@ use bevy::log::tracing::field::display;
 use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use network_serialization::input::{DirectionFlags, InputData};
+use crate::client;
+use crate::client::NotAuthoritative;
 
 #[derive(Resource)]
 struct InputTimer(Timer);
@@ -24,7 +26,7 @@ impl Plugin for InputPlugin
         app
             .init_resource::<InputTimer>()
             .insert_resource(InputStore::new())
-            .add_systems(Update, Self::apply_input);
+            .add_systems(Update, (Self::apply_input, Self::clean_up_clients));
     }
 }
 
@@ -33,32 +35,20 @@ impl InputPlugin
     fn apply_input(
         time: Res<Time>,
         mut timer: ResMut<InputTimer>,
-        mut commands: Commands,
         mut inputs_store: ResMut<InputStore>,
-        mut clients: Query<(Entity, &Client, &mut Transform)>
+        mut clients: Query<(&Client, &mut Transform), Without<NotAuthoritative>>
     )
     {
         if !timer.0.tick(time.delta()).just_finished() {
             return;
         }
 
-        for (entity,client, mut transform) in clients.iter_mut()
+        for (client, mut transform) in clients.iter_mut()
         {
             let inputs = match inputs_store.current_input.get(&client.id) {
                 Some(inputs) => *inputs,
-                None => {
-                    println!("no such client");
-                    let ticks = inputs_store.ticks_without_input.entry(client.id).or_insert(0);
-                    *ticks += 1;
-                    if *ticks > 16 {
-                        commands.entity(entity).despawn();
-                        inputs_store.current_input.remove(&client.id);
-                    }
-                    continue
-                },
+                None => continue,
             };
-
-            inputs_store.ticks_without_input.insert(client.id,0);
 
             let last_sequence = inputs_store.last_input_sequence.entry(client.id)
                 .or_insert(0);
@@ -96,6 +86,30 @@ impl InputPlugin
         }
 
         inputs_store.current_input.clear();
+    }
+
+    fn clean_up_clients(mut commands: Commands, mut input_store: ResMut<InputStore>, clients: Query<(Entity, &Client), With<NotAuthoritative>>)
+    {
+        for (entity, client) in clients.iter()
+        {
+            if let Some(_) = input_store.current_input.get(&client.id)
+            {
+                input_store.ticks_without_input.insert(client.id, 0);
+                continue;
+            }
+
+            let ticks = input_store.ticks_without_input.entry(client.id).or_insert(0);
+            *ticks += 1;
+
+            if *ticks > 16
+            {
+                commands.entity(entity).despawn();
+                input_store.connected_clients.remove(&client.id);
+                input_store.current_input.remove(&client.id);
+                input_store.last_input_sequence.remove(&client.id);
+                input_store.ticks_without_input.remove(&client.id);
+            }
+        }
     }
 }
 
