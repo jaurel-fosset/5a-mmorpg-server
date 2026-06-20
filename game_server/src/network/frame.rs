@@ -6,6 +6,7 @@ use network_serialization::packets::broker::PublishPacket;
 use network_serialization::packets::Packet;
 use network_serialization::packets::topic::TopicTree;
 use network_serialization::Serializable;
+use crate::client::NotAuthoritative;
 use crate::inputs::Client;
 use crate::network::broker::BrokerPeer;
 
@@ -36,7 +37,7 @@ impl FramePlugin
         time: Res<Time>,
         mut timer: ResMut<FrameTimer>,
         broker: Option<Res<BrokerPeer>>,
-        clients: Query<(&Client, &Transform)>
+        clients: Query<(&Client, &Transform), Without<NotAuthoritative>>,
     )
     {
         if !timer.0.tick(time.delta()).just_finished() {
@@ -68,7 +69,7 @@ impl FramePlugin
         }
     }
 
-    fn make_frame(clients: Query<(&Client, &Transform)>) -> Option<TopicTree>
+    fn make_frame(clients: Query<(&Client, &Transform), Without<NotAuthoritative>>) -> Option<TopicTree>
     {
         if clients.is_empty() {
             return None;
