@@ -117,13 +117,15 @@ pub struct AuthoritySwitchPacket
     pub old_shard: u32,
     pub new_shard: u32,
     pub client: u32,
+    pub x: f32,
+    pub y: f32,
 }
 
 impl AuthoritySwitchPacket
 {
-    pub fn new(old_shard: u32, new_shard: u32, client: u32) -> Self
+    pub fn new(old_shard: u32, new_shard: u32, client: u32, x: f32, y: f32) -> Self
     {
-        Self { old_shard, new_shard, client }
+        Self { old_shard, new_shard, client, x, y }
     }
 }
 
@@ -134,6 +136,8 @@ impl Serializable for AuthoritySwitchPacket
         self.old_shard.serialize(stream)?;
         self.new_shard.serialize(stream)?;
         self.client.serialize(stream)?;
+        self.x.serialize(stream)?;
+        self.y.serialize(stream)?;
 
         Ok(())
     }
@@ -148,7 +152,9 @@ impl Deserializable for AuthoritySwitchPacket
         let old_shard = u32::deserialize(bytes)?;
         let new_shard = u32::deserialize(bytes)?;
         let client = u32::deserialize(bytes)?;
+        let x = f32::deserialize(bytes)?;
+        let y = f32::deserialize(bytes)?;
 
-        Ok(Self { old_shard, new_shard, client })
+        Ok(Self { old_shard, new_shard, client, x, y })
     }
 }

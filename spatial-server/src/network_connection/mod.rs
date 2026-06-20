@@ -22,7 +22,7 @@ pub enum NetworkEvent
     PositionUpdate(Vec<(u32, f32, f32)>),
 }
 
-const REQUEST_SHARD_DURATION: Duration = Duration::from_secs(10);
+const REQUEST_SHARD_DURATION: Duration = Duration::from_secs(15);
 
 pub struct NetworkGlobalState
 {
@@ -204,7 +204,7 @@ impl NetworkGlobalState
         {
             let packet = PacketMessage::new(
                 PacketData::AuthoritySwitch(
-                    AuthoritySwitchPacket::new(old_shard.id(), new_shard.id(), entity.id().0)
+                    AuthoritySwitchPacket::new(old_shard.id(), new_shard.id(), entity.id().0, entity.position().x, entity.position().y)
                 )
             );
             let bytes = packet.write().unwrap();

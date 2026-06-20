@@ -1,3 +1,4 @@
+use std::f32;
 use crate::inputs::Client;
 use std::net::Ipv4Addr;
 use bevy::app::App;
@@ -25,7 +26,12 @@ impl Plugin for BrokerPlugin
 
 impl BrokerPlugin
 {
-    fn receive_position(mut commands: Commands, broker: Option<ResMut<BrokerPeer>>, mut input_store: ResMut<InputStore>)
+    fn receive_position(
+        mut commands: Commands,
+        broker: Option<ResMut<BrokerPeer>>,
+        mut input_store: ResMut<InputStore>,
+        mut clients: Query<(&Client, &mut Transform)>
+    )
     {
         let mut broker = match broker
         {
@@ -58,28 +64,59 @@ impl BrokerPlugin
                     {
                         PacketData::Broadcast(packet) => for tree in packet.data
                         {
-                            // On récupère les inputs
-                            let Some(input_tree) = tree.get_child("input") else { break; };
-                            let TopicTreeType::Node(input_topic_node) = &input_tree.item else { break; };
+                            //print!("r");
+                            if let Some(position_tree) = tree.get_child("position") {
+                                //print!("p");
+                                let TopicTreeType::Node(position_topic_node) = &position_tree.item else { break; };
 
-                            for topic_tree in &input_topic_node.data
-                            {
-                                let TopicTreeType::Leaf(leaf) = &topic_tree.item else { continue; };
-                                //println!("topic_tree.name: {:?}", topic_tree.name);
-
-                                let Ok(client_id) = topic_tree.name.parse::<u32>() else { continue; };
-
-                                let data = &leaf.data;
-                                let mut bytes : Bytes = Bytes::copy_from_slice(data);
-                                let Ok(inputs) = <[InputData;16]>::deserialize(&mut bytes) else {continue;};
-                                
-                                if !input_store.contains_client(client_id)
+                                for topic_tree in &position_topic_node.data
                                 {
-                                    commands.spawn((Transform::from_xyz(2f32,2f32,0f32), Client::new(client_id)));
-                                }
+                                    let TopicTreeType::Leaf(leaf) = &topic_tree.item else { continue; };
 
-                                input_store.add_input(client_id, inputs);
+                                    let Ok(client_id) = topic_tree.name.parse::<u32>() else { continue; };
+
+                                    let data = &leaf.data;
+                                    let mut bytes : Bytes = Bytes::copy_from_slice(data);
+                                    let Ok(x) = f32::deserialize(&mut bytes) else {continue;};
+                                    let Ok(y) = f32::deserialize(&mut bytes) else {continue;};
+
+                                    if let Some((_, mut transform)) = clients.iter_mut().find(|(client, _)| client.id() == client_id) {
+                                        // L'entité existe déjà (spawnée par les inputs) → met à jour la position
+                                        transform.translation.x = x;
+                                        transform.translation.y = y;
+                                    } else {
+                                        // L'entité n'existe pas → spawn à la bonne position
+                                        commands.spawn((Transform::from_xyz(x, y, 0f32), Client::new(client_id)));
+                                    }
+                                }
                             }
+
+                            // On récupère les inputs
+                            if let Some(input_tree) = tree.get_child("input") {
+                                //print!("i");
+                                let TopicTreeType::Node(input_topic_node) = &input_tree.item else { break; };
+
+                                for topic_tree in &input_topic_node.data
+                                {
+                                    let TopicTreeType::Leaf(leaf) = &topic_tree.item else { continue; };
+                                    //println!("topic_tree.name: {:?}", topic_tree.name);
+
+                                    let Ok(client_id) = topic_tree.name.parse::<u32>() else { continue; };
+
+                                    let data = &leaf.data;
+                                    let mut bytes : Bytes = Bytes::copy_from_slice(data);
+                                    let Ok(inputs) = <[InputData;16]>::deserialize(&mut bytes) else {continue;};
+
+                                    if !input_store.contains_client(client_id)
+                                        && !clients.iter().any(|(c, _)| c.id() == client_id)
+                                    {
+                                        commands.spawn((Transform::from_xyz(0f32,0f32,0f32), Client::new(client_id)));
+                                    }
+
+                                    input_store.add_input(client_id, inputs);
+                                }
+                            };
+                            println!("end");
                         },
                         _ => {}
                     }

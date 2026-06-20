@@ -61,7 +61,7 @@ async fn init_connection(ip: Ipv4Addr, port: u16, orchestrator_ip: Ipv4Addr, red
 
 async fn get_docker_ip(docker: &mut Docker, id: &str) -> Ipv4Addr
 {
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     let inspect = docker.inspect_container(id, None).await.unwrap();
 

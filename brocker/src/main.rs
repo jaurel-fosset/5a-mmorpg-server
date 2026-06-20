@@ -50,7 +50,7 @@ async fn main() {
         match broker.game_peer.poll() {
             Ok(Some(game_sockets::GameNetworkEvent::Message { connection, stream, data })) => {
                 //println!("Got message from peer: {:?}", connection);
-                let msg = PacketMessage::read(data).unwrap();
+                let msg = PacketMessage::read(data).unwrap(); // ligne 53 ici !
 
                 let connection_data = ConnectionData{ connection, stream };
 
@@ -81,7 +81,9 @@ async fn main() {
                     e => println!("Other error: {:?}", e),
                 }
             }
-            Ok(Some(e)) => println!("Event: {:?}", e),
+            Ok(Some(e)) => {
+                //println!("Event: {:?}", e)
+            },
             Ok(None) => tokio::time::sleep(Duration::from_millis(10)).await,
             Err(e) => println!("Error: {}", e),
         }
@@ -91,7 +93,8 @@ async fn main() {
 fn authority_switch(
     state: &mut BrokerState,
     connection_data: ConnectionData,
-    packet: AuthoritySwitchPacket) {
+    packet: AuthoritySwitchPacket
+) {
     let client_id = packet.client;
     let new_shard = packet.new_shard;
     let old_shard = packet.old_shard;
@@ -108,6 +111,30 @@ fn authority_switch(
     let old_shard_keys = state.client_to_subscribed_keys.entry(old_shard).or_insert(Vec::new());
     old_shard_keys.push(position_key.clone());
     old_shard_keys.retain(|x| *x != input_key);
+
+    let mut tree_entities = TopicTree::new_empty("entities".to_string());
+    // Position
+    let mut tree_position = TopicTree::new_empty("position".to_string());
+
+    let mut bytes = BytesMut::new();
+    let _ = packet.x.serialize(&mut bytes);
+    let _ = packet.y.serialize(&mut bytes);
+
+    tree_position.add_leaf(client_id.to_string(), Vec::<u8>::from(bytes));
+    tree_entities.add_tree(tree_position);
+
+    let connection_data = &state.client_to_connection[&new_shard];
+    let packet = PacketMessage::new(
+        PacketData::Broadcast(
+            BroadcastPacket{
+                data: vec!(tree_entities)
+            }
+        ),
+    );
+
+    let bytes: Bytes = packet.write().unwrap();
+
+    state.game_peer.send(&connection_data.connection,&connection_data.stream,bytes).unwrap();
 }
 
 fn register_connection(
@@ -175,8 +202,8 @@ fn register_client(
             let mut tree_position = TopicTree::new_empty("position".to_string());
 
             let mut bytes = BytesMut::new();
-            let x : f32 = 0.1;
-            let y : f32 = 0.1;
+            let x : f32 = 0.0;
+            let y : f32 = 0.0;
             x.serialize(&mut bytes).unwrap();
             y.serialize(&mut bytes).unwrap();
             tree_position.add_leaf(new_client_id.to_string(), Vec::<u8>::from(bytes));
@@ -283,6 +310,7 @@ fn subscribe_client(
     let subscribed_key  = state.client_to_subscribed_keys.entry(client_id).or_insert(Vec::new());
     for key in keys {
         let key_str = String::from_utf8(key.clone()).unwrap();
+        println!("Subscribe key: {}", key_str);
         if key_str.ends_with("/*") {
             // Stocke sans le "/*" final → "entities/input"
             let trimmed = key_str.trim_end_matches("/*").to_string();

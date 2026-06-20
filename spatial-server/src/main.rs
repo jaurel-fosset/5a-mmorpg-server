@@ -180,7 +180,7 @@ fn main()
                 NetworkEvent::ShardsUpdate(created_shards, destroyed_shards) =>
                 {
                     println!("Shards updated!");
-                    network.reset_timer();
+                   
                     for shard in created_shards
                     {
                         shard_manager.on_receive_shard_creation(shard);
@@ -216,14 +216,14 @@ fn main()
                     
                     shard_manager.reset_shards_load();
 
-                    for mut entity in entity_manager.entities()
+                    for mut entity in entity_manager.entities_mut()
                     {
                         update_shard(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                         update_subscription(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                         handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                     }
 
-                    let vec_entity = entity_manager.entities().collect::<Vec<_>>();
+                    let vec_entity = entity_manager.entities().cloned().collect::<Vec<_>>();
                     let (shards_to_allocate, has_split_or_fused) = quad_tree
                         .split_and_fuse(&mut shard_manager, vec_entity.as_slice());
 
@@ -233,7 +233,7 @@ fn main()
 
                     if has_split_or_fused
                     {
-                        for mut entity in entity_manager.entities()
+                        for mut entity in entity_manager.entities_mut()
                         {
                             handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                         }

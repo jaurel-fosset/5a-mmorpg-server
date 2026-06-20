@@ -37,14 +37,22 @@ impl EntityManager
                     Ok(_) => (),
                     Err(_) => (),
                 };
+                self.entities.insert(id,entity);
+            } else {
+                let Some(_entity) = self.entities.get_mut(&id) else { continue; };
+                _entity.position = entity.position;
             }
-            self.entities.insert(id,entity);
         }
     }
 
-    pub fn entities(&mut self) -> impl Iterator<Item=Entity>
+    pub fn entities(&mut self) -> impl Iterator<Item=&Entity>
     {
-        self.entities.values().cloned()
+        self.entities.values()
+    }
+
+    pub fn entities_mut(&mut self) -> impl Iterator<Item=&mut Entity>
+    {
+        self.entities.values_mut()
     }
 }
 
