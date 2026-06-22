@@ -1,9 +1,10 @@
 use spatial_server::geometry::prelude as geo;
 use spatial_server::network_connection::{NetworkEvent, NetworkGlobalState};
-use spatial_server::network_object::entity::{Entity, EntityId, EntityManager};
+use spatial_server::network_object::entity::{on_entity_join_shard, on_entity_leave_shard, Entity, EntityId, EntityManager};
 use spatial_server::network_object::shard::{ShardId, ShardManager};
 use spatial_server::quad_tree::QuadTree;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::iter::Cloned;
 use std::time::{Duration, Instant};
 use network_serialization::packets::topic::TopicTree;
 
@@ -17,44 +18,50 @@ fn update_shard(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTr
 }
 
 
-fn update_subscription(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
+fn update_subscription(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity_manager: &mut EntityManager)
 {
-    let entity_position = *entity.position();
 
-    let new_subscription = shard_in_subscribe_range(quad_tree, shard_manager, entity_position);
-    let (added_shard, removed_shard) = entity.update_subscription(new_subscription);
-
-    for shard in added_shard
+    for entity in entity_manager.entities_mut()
     {
+        let entity_position = *entity.position();
+
+        let new_subscription = shard_in_subscribe_range(quad_tree, shard_manager, entity_position);
+        let (added_shard, removed_shard) = entity.update_subscription(new_subscription);
+
+        let mut tree_entities = TopicTree::new_empty("entities".to_string());
         let mut positions = TopicTree::new_empty("position".to_string());
-        positions.add_leaf(format!("{}", entity.id().0), Vec::new());
 
-        let mut entities = TopicTree::new_empty("entities".to_string());
-        entities.add_tree(positions);
-
-        match network_manager.subscribe(shard.id(), entities)
+        for shard in added_shard
         {
-            Ok(_) => (),
-            Err(_) => (),
+            let mut positions = TopicTree::new_empty("position".to_string());
+            positions.add_leaf(format!("{}", entity.id().0), Vec::new());
+
+            let mut tree_entities = TopicTree::new_empty("entities".to_string());
+            tree_entities.add_tree(positions);
+
+            match network_manager.subscribe(shard.id(), tree_entities)
+            {
+                Ok(_) => (),
+                Err(_) => (),
+            }
+        }
+
+        for shard in removed_shard
+        {
+            let mut positions = TopicTree::new_empty("position".to_string());
+            positions.add_leaf(format!("{}", entity.id().0), Vec::new());
+
+            let mut tree_entities = TopicTree::new_empty("entities".to_string());
+            tree_entities.add_tree(positions);
+
+
+            match network_manager.unsubscribe(shard.id(), tree_entities)
+            {
+                Ok(_) => (),
+                Err(_) => (),
+            }
         }
     }
-
-    for shard in removed_shard
-    {
-        let mut positions = TopicTree::new_empty("position".to_string());
-        positions.add_leaf(format!("{}", entity.id().0), Vec::new());
-
-        let mut entities = TopicTree::new_empty("entities".to_string());
-        entities.add_tree(positions);
-
-
-        match network_manager.unsubscribe(shard.id(), entities)
-        {
-            Ok(_) => (),
-            Err(_) => (),
-        }
-    }
-}
 
 fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
 {
@@ -78,8 +85,50 @@ fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: 
 
     if current_shard != previous_shard
     {
+        /*if let Some(entities) = shard_manager.get_entities(previous_shard) {
+            let mut tree_entities = TopicTree::new_empty("entities".to_string());
+            let mut positions = TopicTree::new_empty("position".to_string());
+
+            for entity_ in entities.to_owned() {
+                positions.add_leaf(format!("{}", entity_.0), Vec::new());
+                shard_manager.remove_entity(previous_shard, entity_);
+            }
+            tree_entities.add_tree(positions);
+
+            match network_manager.unsubscribe(entity.id().0, tree_entities)
+            {
+                Ok(_) => (),
+                Err(_) => (),
+            }
+        }*/
+
+
+        on_entity_leave_shard(network_manager, &shard_manager, entity.id(), previous_shard);
         network_manager.switch_authority(current_shard, previous_shard, entity);
         entity.switch_current_shard(current_shard);
+        on_entity_join_shard(network_manager, &shard_manager, entity.id(), current_shard);
+
+        /*if let Some(entities) = shard_manager.get_entities(current_shard) {
+            let mut tree_entities = TopicTree::new_empty("entities".to_string());
+            let mut positions = TopicTree::new_empty("position".to_string());
+
+            for entity_ in entities{
+                positions.add_leaf(format!("{}", entity_.0), Vec::new());
+            }
+            tree_entities.add_tree(positions);
+
+            match network_manager.subscribe(entity.id().0, tree_entities)
+            {
+                Ok(_) => (),
+                Err(_) => (),
+            }
+        }*/
+
+
+
+
+    } else {
+        println!("current_shard == previous_shard for entity {}", entity.id().0);
     }
 }
 
@@ -210,18 +259,28 @@ fn main()
                             Some((entity_id, position, shard_id))
                         });
 
-                    entity_manager.receive_new_entities(&mut network,positions);
 
-                    //println!("entity_manager.entities: {:?}",entity_manager.entities().collect::<Vec<_>>());
+                    for (entity_id, position, shard_id) in positions.clone() {
+                        shard_manager.add_entity(shard_id,entity_id.into())
+                    }
+
+                    entity_manager.receive_new_entities(&mut network,&mut shard_manager,positions);
+
+
+                    println!("entity_manager.entities: {:?}",entity_manager.entities().collect::<Vec<_>>());
                     
                     shard_manager.reset_shards_load();
 
                     for mut entity in entity_manager.entities_mut()
                     {
                         update_shard(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
-                        update_subscription(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
+                        //update_subscription(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                         handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
                     }
+
+
+
+                    update_subscription(&mut network, &mut quad_tree, &mut shard_manager, &mut entity_manager);
 
                     let vec_entity = entity_manager.entities().cloned().collect::<Vec<_>>();
                     let (shards_to_allocate, has_split_or_fused) = quad_tree
@@ -235,7 +294,9 @@ fn main()
                     {
                         for mut entity in entity_manager.entities_mut()
                         {
+                            println!("avant le fuse {}",entity.current_shard());
                             handle_authority_switch(&mut network, &mut quad_tree, &mut shard_manager, &mut entity);
+                            println!("après le fuse {}",entity.current_shard());
                         }
                     }
                 }

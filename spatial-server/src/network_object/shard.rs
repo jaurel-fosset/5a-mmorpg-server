@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time;
 use thiserror;
+use crate::network_object::entity::{Entity, EntityId};
 
 pub struct ShardManager
 {
@@ -10,6 +11,7 @@ pub struct ShardManager
     deleted_in_use: HashMap<ShardId, (time::Instant, Shard)>,
     replaced_shards: HashMap<ShardId, ShardId>,
     pub(crate) free_shards: HashMap<ShardId, time::Instant>,
+    shard_to_entity: HashMap<ShardId, Vec<EntityId>>,
 }
 
 const MAX_IDLE_TIME: time::Duration = time::Duration::from_secs(10);
@@ -24,6 +26,7 @@ impl ShardManager
             deleted_in_use: HashMap::new(),
             replaced_shards: HashMap::new(),
             free_shards: HashMap::new(),
+            shard_to_entity: HashMap::new(),
         }
     }
 
@@ -224,6 +227,21 @@ impl ShardManager
         if let Some(shard) = self.shards.get_mut(&shard_id){
             shard.entities_count += 1;
         }
+    }
+
+    pub fn get_entities(&self, shard_id: ShardId) -> Option<&[EntityId]> {
+        self.shard_to_entity.get(&shard_id)
+            .map(|entities| { entities.as_slice() })
+    }
+
+    pub fn add_entity(&mut self, shard_id: ShardId, entity: EntityId)
+    {
+        self.shard_to_entity.entry(shard_id).or_insert(Vec::new()).push(entity);
+    }
+
+    pub fn remove_entity(&mut self, shard_id: ShardId, entity: EntityId)
+    {
+        self.shard_to_entity.entry(shard_id).or_insert(Vec::new()).retain(|e| e != &entity)
     }
 }
 

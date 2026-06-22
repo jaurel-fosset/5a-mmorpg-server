@@ -1,9 +1,10 @@
 ﻿use crate::geometry::prelude as geo;
-use crate::network_object::shard::ShardId;
+use crate::network_object::shard::{ShardId, ShardManager};
 use std::collections::{HashMap, HashSet};
-use network_serialization::packets::topic::TopicTree;
+use network_serialization::packets::topic::{TopicTree, TopicTreeType};
 use crate::network_connection::NetworkGlobalState;
 
+#[derive(Debug,Clone)]
 pub struct EntityManager
 {
     entities: HashMap<EntityId,Entity>,
@@ -16,7 +17,7 @@ impl EntityManager
         EntityManager { entities: HashMap::new() }
     }
 
-    pub fn receive_new_entities<T>(&mut self, network_manager: &mut NetworkGlobalState,entities: T)
+    pub fn receive_new_entities<T>(&mut self, network_manager: &mut NetworkGlobalState, shard_manager: &mut ShardManager, entities: T)
     where
         T: IntoIterator<Item=(EntityId, geo::Position, ShardId)>
     {
@@ -37,10 +38,66 @@ impl EntityManager
                     Ok(_) => (),
                     Err(_) => (),
                 };
+
+                on_entity_join_shard(network_manager, shard_manager, id, entity.current_shard);
+
+                /*if let Some(entities) = shard_manager.get_entities(entity.current_shard) {
+                    for entity_ in entities{
+                        let mut tree_entities = TopicTree::new_empty("entities".to_string());
+                        let mut positions = TopicTree::new_empty("position".to_string());
+
+                        positions.add_leaf(format!("{}", entity.id.0), Vec::new());
+
+                        tree_entities.add_tree(positions);
+
+                        match network_manager.subscribe(entity.id().0, tree_entities)
+                        {
+                            Ok(_) => (),
+                            Err(_) => (),
+                        }
+                    }
+                }*/
+
                 self.entities.insert(id,entity);
             } else {
                 let Some(_entity) = self.entities.get_mut(&id) else { continue; };
                 _entity.position = entity.position;
+
+                /*if _entity.current_shard != entity.current_shard {
+                    if let Some(entities) = shard_manager.get_entities(entity.current_shard) {
+                        let mut tree_entities = TopicTree::new_empty("entities".to_string());
+                        let mut positions = TopicTree::new_empty("position".to_string());
+
+                        for entity_ in entities{
+                            positions.add_leaf(format!("{}", entity_.0), Vec::new());
+                        }
+                        tree_entities.add_tree(positions);
+
+                        match network_manager.subscribe(entity.id().0, tree_entities)
+                        {
+                            Ok(_) => (),
+                            Err(_) => (),
+                        }
+                    }
+
+                    if let Some(entities) = shard_manager.get_entities(entity.current_shard) {
+                        for entity_ in entities{
+                            let mut tree_entities = TopicTree::new_empty("entities".to_string());
+                            let mut positions = TopicTree::new_empty("position".to_string());
+
+                            positions.add_leaf(format!("{}", entity.id.0), Vec::new());
+
+                            tree_entities.add_tree(positions);
+
+                            match network_manager.subscribe(entity.id().0, tree_entities)
+                            {
+                                Ok(_) => (),
+                                Err(_) => (),
+                            }
+                        }
+                    }
+                }*/
+
             }
         }
     }
@@ -54,6 +111,76 @@ impl EntityManager
     {
         self.entities.values_mut()
     }
+}
+
+
+pub fn on_entity_join_shard(
+    network: &mut NetworkGlobalState,
+    shard_manager: &ShardManager,
+    new_entity: EntityId,
+    shard_id: ShardId,
+) {
+    let entities_in_shard = match shard_manager.get_entities(shard_id) {
+        Some(entities) => entities.to_vec(),
+        None => return,
+    };
+
+    let mut positions = TopicTree::new_empty("position".to_string());
+    for other in &entities_in_shard {
+        positions.add_leaf(other.0.to_string(), Vec::new());
+    }
+
+    if let TopicTreeType::Node(ref node) = positions.item {
+        if !node.data.is_empty() {
+            let mut entities_tree = TopicTree::new_empty("entities".to_string());
+            entities_tree.add_tree(positions);
+            network.subscribe(new_entity.0, entities_tree).ok();
+        }
+    }
+
+    // Un message par autre entité pour les abonner à new_entity
+    for other in &entities_in_shard {
+        if *other == new_entity { continue; }
+        network.subscribe(other.0, position_topic(new_entity.0)).ok();
+    }
+}
+
+pub fn on_entity_leave_shard(
+    network: &mut NetworkGlobalState,
+    shard_manager: &ShardManager,
+    leaving_entity: EntityId,
+    shard_id: ShardId,
+) {
+    let entities_in_shard = match shard_manager.get_entities(shard_id) {
+        Some(entities) => entities.to_vec(),
+        None => return,
+    };
+
+    let mut positions = TopicTree::new_empty("position".to_string());
+    for other in &entities_in_shard {
+        positions.add_leaf(other.0.to_string(), Vec::new());
+    }
+
+    if let TopicTreeType::Node(ref node) = positions.item {
+        if !node.data.is_empty() {
+            let mut entities_tree = TopicTree::new_empty("entities".to_string());
+            entities_tree.add_tree(positions);
+            network.unsubscribe(leaving_entity.0, entities_tree).ok();
+        }
+    }
+
+    // Un message par autre entité pour les abonner à new_entity
+    for other in &entities_in_shard {
+        if *other == leaving_entity { continue; }
+        network.unsubscribe(other.0, position_topic(leaving_entity.0)).ok();
+    }
+}
+pub fn position_topic(entity_id: u32) -> TopicTree {
+    let mut positions = TopicTree::new_empty("position".to_string());
+    positions.add_leaf(entity_id.to_string(), Vec::new());
+    let mut entities = TopicTree::new_empty("entities".to_string());
+    entities.add_tree(positions);
+    entities
 }
 
 #[derive(Debug, Clone)]

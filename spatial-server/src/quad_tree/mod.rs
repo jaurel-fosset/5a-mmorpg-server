@@ -125,7 +125,7 @@ impl QuadTree
                         println!("shards count: {}", shard_manager.shards.len());
                         match self.split_leaf(current_node, shard_manager, entities) {
                             None => {
-                                println!("split_leaf failed");
+                                //println!("split_leaf failed");
                                 shard_allocation_count += 3;
                             }
                             Some(_) => {
