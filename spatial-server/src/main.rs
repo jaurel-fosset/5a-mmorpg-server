@@ -62,6 +62,7 @@ fn update_subscription(network_manager: &mut NetworkGlobalState, quad_tree: &mut
             }
         }
     }
+}
 
 fn handle_authority_switch(network_manager: &mut NetworkGlobalState, quad_tree: &mut QuadTree, shard_manager: &mut ShardManager, entity: &mut Entity)
 {

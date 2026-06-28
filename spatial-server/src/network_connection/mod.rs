@@ -209,6 +209,8 @@ impl NetworkGlobalState
             );
             let bytes = packet.write().unwrap();
 
+            println!("[Spatial] Switching authority to newShardId: {} , {} , {}", old_shard.id(), new_shard.id(), entity.id().0);
+
             match broker.send(bytes)
             {
                 Ok(_) => (),
